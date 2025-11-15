@@ -9,10 +9,8 @@ import {
   orderBy,
   Unsubscribe,
 } from 'firebase/firestore';
-import { getDb } from '../config/firebase';
+import { db } from '../config/firebase';
 import { Student, Instructor, DanceClass, Payment, Cost } from '../../types';
-
-const db = getDb();
 
 // --- Students ---
 
