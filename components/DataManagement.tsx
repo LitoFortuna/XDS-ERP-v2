@@ -26,7 +26,7 @@ const ImporterSection: React.FC<{
     };
 
     const handleDownloadTemplate = () => {
-        const csvContent = templateHeaders.join(',') + '\n';
+        const csvContent = templateHeaders.join(';') + '\n';
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         if (link.href) {
@@ -54,13 +54,13 @@ const ImporterSection: React.FC<{
             try {
                 const text = e.target?.result as string;
                 const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
-                const headers = lines.shift()?.split(',').map(h => h.trim());
+                const headers = lines.shift()?.split(';').map(h => h.trim());
 
                 if (JSON.stringify(headers) !== JSON.stringify(templateHeaders)) {
                     throw new Error('Las cabeceras del CSV no coinciden con la plantilla.');
                 }
                 
-                const data = lines.map(line => line.split(',').map(item => item.trim()));
+                const data = lines.map(line => line.split(';').map(item => item.trim()));
                 await onImport(data);
                 setSuccess(`¡Se han importado ${data.length} registros de ${title.toLowerCase()} correctamente!`);
                 setFile(null);
