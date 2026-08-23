@@ -350,7 +350,7 @@ const StudentList: React.FC<StudentListProps> = ({ students, classes, merchandis
   };
 
   const handleExportCSV = async () => {
-    const privateDataMap = await fetchAllStudentPrivateData();
+    const privateDataMap = await fetchAllStudentPrivateData(sortedAndFilteredStudents.map(s => s.id));
 
     const headers = [
       'Nombre', 'Edad', 'DNI', 'Fecha de Alta', 'Fecha de Baja', 'Fecha de Nacimiento', 'Teléfono', 'Email',

@@ -1,5 +1,5 @@
 
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, writeBatch, collectionGroup, Unsubscribe } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, writeBatch, Unsubscribe } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Student, StudentPrivateData } from '../../../types';
 
@@ -16,15 +16,16 @@ export const setStudentPrivateData = async (studentId: string, data: StudentPriv
     await setDoc(privateDocRef(studentId), data, { merge: true });
 };
 
-// Admin-only bulk read across every student's private doc (e.g. for CSV export) — allowed by
-// firestore.rules because collection-group queries are covered by the students/{id}/private rule.
-export const fetchAllStudentPrivateData = async (): Promise<Record<string, StudentPrivateData>> => {
-    const snapshot = await getDocs(collectionGroup(db, 'private'));
+// Admin-only bulk read across every student's private doc (e.g. for CSV export / conciliación
+// bancaria). Fetches one-by-one via getDoc() instead of a collectionGroup('private') query —
+// simple point reads against the exact same students/{id}/private/sensitive rule, so there's no
+// separate "list vs get" rule behavior to reason about.
+export const fetchAllStudentPrivateData = async (studentIds: string[]): Promise<Record<string, StudentPrivateData>> => {
     const result: Record<string, StudentPrivateData> = {};
-    snapshot.forEach(docSnap => {
-        const studentId = docSnap.ref.parent.parent?.id;
-        if (studentId) result[studentId] = docSnap.data() as StudentPrivateData;
-    });
+    await Promise.all(studentIds.map(async (studentId) => {
+        const snap = await getDoc(privateDocRef(studentId));
+        if (snap.exists()) result[studentId] = snap.data() as StudentPrivateData;
+    }));
     return result;
 };
 

@@ -10,6 +10,14 @@ interface State {
     error: Error | null;
 }
 
+// Browsers phrase this differently, but they all describe the same thing: a tab that's been open
+// since before a new deploy tries to fetch a lazy-loaded chunk (e.g. React.lazy() for a view)
+// whose hashed filename no longer exists on the server, because the current deployment only
+// serves the current build's files. It isn't a real app bug — a reload fetches the current
+// index.html/chunk references and self-heals — so it doesn't deserve the scary error screen.
+const CHUNK_LOAD_ERROR_PATTERN = /dynamically imported module|loading chunk .* failed|importing a module script failed/i;
+const RELOAD_GUARD_KEY = 'xds-chunk-reload-attempted';
+
 export class ErrorBoundary extends Component<Props, State> {
     constructor(props: Props) {
         super(props);
@@ -26,10 +34,25 @@ export class ErrorBoundary extends Component<Props, State> {
 
     componentDidCatch(error: Error, errorInfo: ErrorInfo) {
         console.error('Uncaught error:', error, errorInfo);
+
+        if (CHUNK_LOAD_ERROR_PATTERN.test(error.message) && !sessionStorage.getItem(RELOAD_GUARD_KEY)) {
+            sessionStorage.setItem(RELOAD_GUARD_KEY, '1');
+            window.location.reload();
+        }
     }
 
     render() {
         if (this.state.hasError) {
+            const isChunkError = CHUNK_LOAD_ERROR_PATTERN.test(this.state.error?.message || '');
+            if (isChunkError && sessionStorage.getItem(RELOAD_GUARD_KEY)) {
+                // A reload was already triggered in componentDidCatch above — show a plain
+                // loading state instead of the error screen while it happens.
+                return (
+                    <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+                        <div className="w-12 h-12 border-4 border-purple-500/20 border-t-purple-600 rounded-full animate-spin"></div>
+                    </div>
+                );
+            }
             return (
                 <div className="min-h-screen bg-gray-900 flex items-center justify-center p-6 text-center">
                     <div className="max-w-md w-full bg-gray-800 border border-red-500/30 rounded-3xl p-8 shadow-2xl">

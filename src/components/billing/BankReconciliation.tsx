@@ -94,6 +94,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
     const [selectedYear, setSelectedYear] = useState(today.getFullYear());
     const [file, setFile] = useState<File | null>(null);
     const [isParsing, setIsParsing] = useState(false);
+    const [isMatching, setIsMatching] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState('');
     const [resultMessage, setResultMessage] = useState('');
@@ -180,59 +181,66 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
             return;
         }
         setError('');
+        setIsMatching(true);
 
-        // Datos sensibles (IBAN) — lectura admin-only, misma función que ya usa la exportación CSV.
-        const privateDataMap = await fetchAllStudentPrivateData();
-        const studentsByIban = new Map<string, Student[]>();
-        students.forEach(s => {
-            const iban = normalizeIban(privateDataMap[s.id]?.iban);
-            if (!iban) return;
-            const list = studentsByIban.get(iban) || [];
-            list.push(s);
-            studentsByIban.set(iban, list);
-        });
-
-        const monthKey = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
-
-        const matched: MatchedRow[] = [];
-        const unmatched: UnmatchedRow[] = [];
-
-        dataRows.forEach((row, i) => {
-            const titular = titularCol >= 0 ? String(row[titularCol] ?? '').trim() : '';
-            const concept = conceptCol >= 0 ? String(row[conceptCol] ?? '').trim() : '';
-            const ibanRaw = String(row[ibanCol] ?? '').trim();
-            const iban = normalizeIban(ibanRaw);
-            const amount = parseSpanishAmount(row[amountCol]);
-
-            if (!iban || !amount || isNaN(amount)) return; // fila vacía / de metadatos / basura
-
-            const candidates = studentsByIban.get(iban) || [];
-            if (candidates.length === 0) {
-                unmatched.push({ bankRowIndex: i, titular, iban: ibanRaw, concept, amount });
-                return;
-            }
-
-            const singleStudentId = candidates.length === 1 ? candidates[0].id : null;
-            const hasExistingPayment = singleStudentId
-                ? payments.some(p => p.studentId === singleStudentId && p.date.startsWith(monthKey))
-                : false;
-
-            matched.push({
-                bankRowIndex: i,
-                titular,
-                iban: ibanRaw,
-                concept,
-                amount,
-                candidates,
-                selectedStudentId: singleStudentId,
-                include: !!singleStudentId && !hasExistingPayment,
-                duplicateWarning: hasExistingPayment,
+        try {
+            // Datos sensibles (IBAN) — lectura admin-only, misma función que ya usa la exportación CSV.
+            const privateDataMap = await fetchAllStudentPrivateData(students.map(s => s.id));
+            const studentsByIban = new Map<string, Student[]>();
+            students.forEach(s => {
+                const iban = normalizeIban(privateDataMap[s.id]?.iban);
+                if (!iban) return;
+                const list = studentsByIban.get(iban) || [];
+                list.push(s);
+                studentsByIban.set(iban, list);
             });
-        });
 
-        setMatchedRows(matched);
-        setUnmatchedRows(unmatched);
-        setStep('review');
+            const monthKey = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
+
+            const matched: MatchedRow[] = [];
+            const unmatched: UnmatchedRow[] = [];
+
+            dataRows.forEach((row, i) => {
+                const titular = titularCol >= 0 ? String(row[titularCol] ?? '').trim() : '';
+                const concept = conceptCol >= 0 ? String(row[conceptCol] ?? '').trim() : '';
+                const ibanRaw = String(row[ibanCol] ?? '').trim();
+                const iban = normalizeIban(ibanRaw);
+                const amount = parseSpanishAmount(row[amountCol]);
+
+                if (!iban || !amount || isNaN(amount)) return; // fila vacía / de metadatos / basura
+
+                const candidates = studentsByIban.get(iban) || [];
+                if (candidates.length === 0) {
+                    unmatched.push({ bankRowIndex: i, titular, iban: ibanRaw, concept, amount });
+                    return;
+                }
+
+                const singleStudentId = candidates.length === 1 ? candidates[0].id : null;
+                const hasExistingPayment = singleStudentId
+                    ? payments.some(p => p.studentId === singleStudentId && p.date.startsWith(monthKey))
+                    : false;
+
+                matched.push({
+                    bankRowIndex: i,
+                    titular,
+                    iban: ibanRaw,
+                    concept,
+                    amount,
+                    candidates,
+                    selectedStudentId: singleStudentId,
+                    include: !!singleStudentId && !hasExistingPayment,
+                    duplicateWarning: hasExistingPayment,
+                });
+            });
+
+            setMatchedRows(matched);
+            setUnmatchedRows(unmatched);
+            setStep('review');
+        } catch (err: any) {
+            setError(err.message || 'No se pudieron leer los IBAN de las fichas de alumnos.');
+        } finally {
+            setIsMatching(false);
+        }
     };
 
     const handleToggleInclude = (bankRowIndex: number) => {
@@ -379,7 +387,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                             {error && <p className="text-red-400 text-sm">{error}</p>}
                             <div className="flex justify-end gap-2 pt-2">
                                 <button onClick={() => setStep('upload')} className="bg-gray-600 text-gray-200 px-4 py-2 rounded-md hover:bg-gray-500">Atrás</button>
-                                <button onClick={handleConfirmMapping} className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700">Continuar</button>
+                                <button onClick={handleConfirmMapping} disabled={isMatching} className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {isMatching ? 'Cruzando datos...' : 'Continuar'}
+                                </button>
                             </div>
                         </div>
                     )}

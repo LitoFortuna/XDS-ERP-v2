@@ -638,7 +638,7 @@ const DataManagement: React.FC<DataManagementProps> = ({
                 <div className="flex flex-col sm:flex-row gap-3">
                     <button
                         onClick={async () => {
-                            const studentPrivateDataMap = await fetchAllStudentPrivateData();
+                            const studentPrivateDataMap = await fetchAllStudentPrivateData(students.map(s => s.id));
                             generateFullBackupZip({ students, instructors, classes, payments, costs, merchandiseItems, studentPrivateDataMap });
                         }}
                         className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-purple-900/30 transition-all active:scale-95"
