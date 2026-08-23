@@ -18,6 +18,7 @@ interface MatchedRow {
     bankRowIndex: number;
     titular: string;
     iban: string;
+    concept: string;
     amount: number;
     candidates: Student[];
     selectedStudentId: string | null;
@@ -29,6 +30,7 @@ interface UnmatchedRow {
     bankRowIndex: number;
     titular: string;
     iban: string;
+    concept: string;
     amount: number;
 }
 
@@ -42,15 +44,47 @@ const formatCurrency = (v: number) => {
     return parts.join(',') + '€';
 };
 
-const KEYWORD_HINTS: Record<'titular' | 'iban' | 'amount', string[]> = {
+// Los remesas de bancos españolas suelen venir como "14,00 €" o, para importes grandes,
+// "1.330,00 €" (punto de millar, coma decimal) — Number()/parseFloat() a secas malinterpretan
+// eso. Si vienen ambos separadores, el punto es de millar; si solo hay coma, es decimal.
+const parseSpanishAmount = (raw: unknown): number => {
+    if (typeof raw === 'number') return raw;
+    let s = String(raw ?? '').trim().replace(/[€\s]/g, '');
+    if (!s) return NaN;
+    if (s.includes('.') && s.includes(',')) {
+        s = s.replace(/\./g, '').replace(',', '.');
+    } else if (s.includes(',')) {
+        s = s.replace(',', '.');
+    }
+    return parseFloat(s);
+};
+
+const KEYWORD_HINTS: Record<'titular' | 'iban' | 'amount' | 'concept', string[]> = {
     titular: ['titular', 'nombre', 'ordenante', 'beneficiario', 'deudor'],
     iban: ['iban', 'cuenta', 'ccc'],
     amount: ['importe', 'cantidad', 'amount', 'euros'],
+    concept: ['concepto', 'descripcion', 'descripción', 'referencia'],
 };
 
-const guessColumn = (headers: string[], kind: 'titular' | 'iban' | 'amount'): number => {
+const guessColumn = (headers: string[], kind: keyof typeof KEYWORD_HINTS): number => {
     const keywords = KEYWORD_HINTS[kind];
     return headers.findIndex(h => keywords.some(k => h.toLowerCase().includes(k)));
+};
+
+// Las remesas bancarias (SEPA CORE, etc.) casi nunca empiezan con la fila de cabecera en la
+// primera línea — suelen traer un bloque de metadatos primero (presentador, acreedor, IBAN del
+// acreedor, importe total...) y la tabla real de "Deudor / Cuenta de Cargo / Concepto / Importe"
+// aparece varias filas más abajo. Se busca la primera fila que tenga a la vez una columna que
+// parezca IBAN y otra que parezca Importe, en vez de asumir que la fila 0 es la cabecera.
+const findHeaderRowIndex = (rows: any[][]): number => {
+    const maxScan = Math.min(rows.length, 60);
+    for (let i = 0; i < maxScan; i++) {
+        const cells = (rows[i] || []).map(c => String(c ?? '').toLowerCase());
+        const hasIban = cells.some(c => KEYWORD_HINTS.iban.some(k => c.includes(k)));
+        const hasAmount = cells.some(c => KEYWORD_HINTS.amount.some(k => c.includes(k)));
+        if (hasIban && hasAmount) return i;
+    }
+    return 0;
 };
 
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose, students, payments, onConfirm }) => {
@@ -65,23 +99,27 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
     const [resultMessage, setResultMessage] = useState('');
 
     const [rawRows, setRawRows] = useState<any[][]>([]);
+    const [headerRowIndex, setHeaderRowIndex] = useState(0);
     const [titularCol, setTitularCol] = useState<number>(-1);
     const [ibanCol, setIbanCol] = useState<number>(-1);
     const [amountCol, setAmountCol] = useState<number>(-1);
+    const [conceptCol, setConceptCol] = useState<number>(-1);
 
     const [matchedRows, setMatchedRows] = useState<MatchedRow[]>([]);
     const [unmatchedRows, setUnmatchedRows] = useState<UnmatchedRow[]>([]);
 
-    const headers = rawRows[0] ? rawRows[0].map(h => String(h ?? '')) : [];
-    const dataRows = rawRows.slice(1);
+    const headers = rawRows[headerRowIndex] ? rawRows[headerRowIndex].map(h => String(h ?? '')) : [];
+    const dataRows = rawRows.slice(headerRowIndex + 1);
 
     const resetAll = () => {
         setStep('upload');
         setFile(null);
         setRawRows([]);
+        setHeaderRowIndex(0);
         setTitularCol(-1);
         setIbanCol(-1);
         setAmountCol(-1);
+        setConceptCol(-1);
         setMatchedRows([]);
         setUnmatchedRows([]);
         setError('');
@@ -100,25 +138,37 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
 
     const handleParseFile = async () => {
         if (!file) {
-            setError('Selecciona un archivo .xlsx.');
+            setError('Selecciona un archivo .xls o .xlsx.');
             return;
         }
         setIsParsing(true);
         setError('');
         try {
-            const { readSheet } = await import('read-excel-file/browser');
-            const rows = (await readSheet(file)) as any[][];
+            const XLSX = await import('xlsx');
+            const buffer = await file.arrayBuffer();
+            const workbook = XLSX.read(buffer, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            if (!firstSheetName) {
+                throw new Error('El archivo no tiene ninguna hoja.');
+            }
+            const sheet = workbook.Sheets[firstSheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' }) as any[][];
             if (!rows || rows.length < 2) {
                 throw new Error('El archivo no tiene filas de datos (solo cabecera, o está vacío).');
             }
+
+            const detectedHeaderRow = findHeaderRowIndex(rows);
+            const detectedHeaders = rows[detectedHeaderRow].map(h => String(h ?? ''));
+
             setRawRows(rows);
-            const detectedHeaders = rows[0].map(h => String(h ?? ''));
+            setHeaderRowIndex(detectedHeaderRow);
             setTitularCol(guessColumn(detectedHeaders, 'titular'));
             setIbanCol(guessColumn(detectedHeaders, 'iban'));
             setAmountCol(guessColumn(detectedHeaders, 'amount'));
+            setConceptCol(guessColumn(detectedHeaders, 'concept'));
             setStep('mapping');
         } catch (err: any) {
-            setError(err.message || 'No se pudo leer el archivo. Comprueba que es un .xlsx válido.');
+            setError(err.message || 'No se pudo leer el archivo. Comprueba que es un .xls/.xlsx válido.');
         } finally {
             setIsParsing(false);
         }
@@ -149,16 +199,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
 
         dataRows.forEach((row, i) => {
             const titular = titularCol >= 0 ? String(row[titularCol] ?? '').trim() : '';
+            const concept = conceptCol >= 0 ? String(row[conceptCol] ?? '').trim() : '';
             const ibanRaw = String(row[ibanCol] ?? '').trim();
             const iban = normalizeIban(ibanRaw);
-            const amountRaw = row[amountCol];
-            const amount = typeof amountRaw === 'number' ? amountRaw : parseFloat(String(amountRaw ?? '').replace(',', '.'));
+            const amount = parseSpanishAmount(row[amountCol]);
 
-            if (!iban || !amount || isNaN(amount)) return; // fila vacía / de cabecera-total / basura
+            if (!iban || !amount || isNaN(amount)) return; // fila vacía / de metadatos / basura
 
             const candidates = studentsByIban.get(iban) || [];
             if (candidates.length === 0) {
-                unmatched.push({ bankRowIndex: i, titular, iban: ibanRaw, amount });
+                unmatched.push({ bankRowIndex: i, titular, iban: ibanRaw, concept, amount });
                 return;
             }
 
@@ -171,6 +221,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                 bankRowIndex: i,
                 titular,
                 iban: ibanRaw,
+                concept,
                 amount,
                 candidates,
                 selectedStudentId: singleStudentId,
@@ -210,7 +261,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                 date: dateStr,
                 paymentMethod: 'Domiciliación',
                 concept: `Cuota ${MONTHS[selectedMonth]} ${selectedYear} (conciliación bancaria)`,
-                notes: `Titular banco: ${r.titular || 'desconocido'}`,
+                notes: [`Titular banco: ${r.titular || 'desconocido'}`, r.concept ? `Concepto banco: ${r.concept}` : null].filter(Boolean).join(' — '),
             }));
             await onConfirm(paymentsToCreate);
             setResultMessage(`Se han registrado ${paymentsToCreate.length} cobro(s) por domiciliación.`);
@@ -235,8 +286,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                     {step === 'upload' && (
                         <div className="space-y-4">
                             <p className="text-sm text-gray-400">
-                                Sube el Excel (.xlsx) del banco con las domiciliaciones de un mes. El ERP cruzará el
-                                número de cuenta de cada fila con el IBAN guardado en la ficha de cada alumno.
+                                Sube el fichero del banco (.xls o .xlsx) con las domiciliaciones de un mes. El ERP
+                                localizará automáticamente la tabla de adeudos dentro del fichero (aunque venga
+                                precedida de datos de la remesa) y cruzará el número de cuenta de cada fila con el
+                                IBAN guardado en la ficha de cada alumno.
                             </p>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -251,10 +304,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Archivo del banco (.xlsx)</label>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">Archivo del banco (.xls / .xlsx)</label>
                                 <input
                                     type="file"
-                                    accept=".xlsx"
+                                    accept=".xls,.xlsx"
                                     onChange={handleFileChange}
                                     className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-purple-600 file:text-white hover:file:bg-purple-700"
                                 />
@@ -272,10 +325,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                     {step === 'mapping' && (
                         <div className="space-y-4">
                             <p className="text-sm text-gray-400">
-                                Indica qué columna del Excel es cada dato. Se han preseleccionado por el nombre de la
-                                cabecera cuando ha sido posible — revísalo antes de continuar.
+                                Indica qué columna del fichero es cada dato. Se ha localizado la tabla y preseleccionado
+                                las columnas por el nombre de la cabecera cuando ha sido posible — revísalo antes de
+                                continuar.
                             </p>
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-300 mb-1">Titular (opcional)</label>
                                     <select value={titularCol} onChange={e => setTitularCol(parseInt(e.target.value))} className={selectClass + ' w-full'}>
@@ -294,6 +348,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                                     <label className="block text-sm font-medium text-gray-300 mb-1">Importe</label>
                                     <select value={amountCol} onChange={e => setAmountCol(parseInt(e.target.value))} className={selectClass + ' w-full'}>
                                         <option value={-1}>— Selecciona —</option>
+                                        {headers.map((h, i) => <option key={i} value={i}>{h || `Columna ${i + 1}`}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-1">Concepto (opcional)</label>
+                                    <select value={conceptCol} onChange={e => setConceptCol(parseInt(e.target.value))} className={selectClass + ' w-full'}>
+                                        <option value={-1}>— No usar —</option>
                                         {headers.map((h, i) => <option key={i} value={i}>{h || `Columna ${i + 1}`}</option>)}
                                     </select>
                                 </div>
@@ -341,6 +402,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                                                 <th className="px-3 py-2"></th>
                                                 <th className="px-3 py-2">Titular (banco)</th>
                                                 <th className="px-3 py-2">IBAN</th>
+                                                <th className="px-3 py-2">Concepto</th>
                                                 <th className="px-3 py-2">Importe</th>
                                                 <th className="px-3 py-2">Alumno</th>
                                             </tr>
@@ -353,6 +415,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                                                     </td>
                                                     <td className="px-3 py-2">{r.titular || '—'}</td>
                                                     <td className="px-3 py-2 font-mono text-xs">{r.iban}</td>
+                                                    <td className="px-3 py-2 text-xs text-gray-500">{r.concept || '—'}</td>
                                                     <td className="px-3 py-2 text-white font-medium">{formatCurrency(r.amount)}</td>
                                                     <td className="px-3 py-2">
                                                         {r.candidates.length > 1 ? (
@@ -374,7 +437,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                                                 </tr>
                                             ))}
                                             {matchedRows.length === 0 && (
-                                                <tr><td colSpan={5} className="px-3 py-4 text-center text-gray-500 italic">Sin coincidencias.</td></tr>
+                                                <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-500 italic">Sin coincidencias.</td></tr>
                                             )}
                                         </tbody>
                                     </table>
@@ -391,6 +454,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                                             <tr>
                                                 <th className="px-3 py-2">Titular (banco)</th>
                                                 <th className="px-3 py-2">IBAN</th>
+                                                <th className="px-3 py-2">Concepto</th>
                                                 <th className="px-3 py-2">Importe</th>
                                             </tr>
                                         </thead>
@@ -399,11 +463,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                                                 <tr key={r.bankRowIndex} className="border-t border-gray-800">
                                                     <td className="px-3 py-2">{r.titular || '—'}</td>
                                                     <td className="px-3 py-2 font-mono text-xs">{r.iban}</td>
+                                                    <td className="px-3 py-2 text-xs text-gray-500">{r.concept || '—'}</td>
                                                     <td className="px-3 py-2 text-white font-medium">{formatCurrency(r.amount)}</td>
                                                 </tr>
                                             ))}
                                             {unmatchedRows.length === 0 && (
-                                                <tr><td colSpan={3} className="px-3 py-4 text-center text-gray-500 italic">Todas las filas han encontrado alumno.</td></tr>
+                                                <tr><td colSpan={4} className="px-3 py-4 text-center text-gray-500 italic">Todas las filas han encontrado alumno.</td></tr>
                                             )}
                                         </tbody>
                                     </table>
