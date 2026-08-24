@@ -418,8 +418,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {matchedRows.map(r => (
-                                                <tr key={r.bankRowIndex} className={`border-t border-gray-800 ${r.duplicateWarning ? 'bg-orange-500/10' : ''}`}>
+                                            {matchedRows.map(r => {
+                                                const selectedStudent = r.candidates.find(c => c.id === r.selectedStudentId);
+                                                const isInactive = !!selectedStudent && !selectedStudent.active;
+                                                return (
+                                                <tr key={r.bankRowIndex} className={`border-t border-gray-800 ${r.duplicateWarning ? 'bg-orange-500/10' : isInactive ? 'bg-yellow-500/10' : ''}`}>
                                                     <td className="px-3 py-2">
                                                         <input type="checkbox" checked={r.include} disabled={!r.selectedStudentId} onChange={() => handleToggleInclude(r.bankRowIndex)} />
                                                     </td>
@@ -435,7 +438,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                                                                 className={selectClass}
                                                             >
                                                                 <option value="" disabled>Cuenta compartida, elige alumno...</option>
-                                                                {r.candidates.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                                {r.candidates.map(c => <option key={c.id} value={c.id}>{c.name}{!c.active ? ' (de baja)' : ''}</option>)}
                                                             </select>
                                                         ) : (
                                                             <span className="text-white">{r.candidates[0]?.name}</span>
@@ -443,9 +446,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                                                         {r.duplicateWarning && (
                                                             <p className="text-[10px] text-orange-400 mt-0.5">Ya existe un cobro este mes para este alumno</p>
                                                         )}
+                                                        {isInactive && (
+                                                            <p className="text-[10px] text-yellow-400 mt-0.5">Este alumno está de baja — comprueba si es correcto antes de registrar</p>
+                                                        )}
                                                     </td>
                                                 </tr>
-                                            ))}
+                                                );
+                                            })}
                                             {matchedRows.length === 0 && (
                                                 <tr><td colSpan={6} className="px-3 py-4 text-center text-gray-500 italic">Sin coincidencias.</td></tr>
                                             )}
