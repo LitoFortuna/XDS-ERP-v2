@@ -77,11 +77,19 @@ const InteractiveSchedule: React.FC<InteractiveScheduleProps> = ({ classes, inst
             if (minutes >= timeToMinutes('15:00')) {
                 minutes -= 120;
             }
-            return (minutes - timeToMinutes('08:00')) / 15 + 1;
+            // Redondeado a la fila de 15 min más cercana: una clase cuya hora no cae justo en un
+            // múltiplo de 15 (p.ej. termina a las 21:35, en vez de :30 o :45) generaría un número
+            // de fila con decimales, que CSS Grid considera inválido — el navegador ignora el
+            // grid-row entero y la clase salta al principio de la cuadrícula en vez de mostrarse
+            // en su horario real.
+            return Math.round((minutes - timeToMinutes('08:00')) / 15) + 1;
         };
 
         const rowStart = calculateRow(danceClass.startTime);
-        const rowEnd = calculateRow(danceClass.endTime);
+        // Tras redondear, una clase muy corta (<8 min) podría quedar con la misma fila de inicio
+        // y fin — un tramo de 0 filas también es inválido en CSS Grid, así que se garantiza al
+        // menos 1 fila de alto.
+        const rowEnd = Math.max(calculateRow(danceClass.endTime), rowStart + 1);
 
         return {
             gridRow: `${rowStart} / ${rowEnd}`,
