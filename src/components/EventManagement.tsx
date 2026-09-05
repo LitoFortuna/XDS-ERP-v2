@@ -481,7 +481,7 @@ const EventManagement: React.FC<EventManagementProps> = ({ events, students, add
                             </div>
                         </div>
 
-                        <div className="max-h-96 overflow-y-auto custom-scrollbar bg-gray-900 rounded-xl border border-gray-700">
+                        <div className="max-h-96 overflow-y-auto overflow-x-auto custom-scrollbar bg-gray-900 rounded-xl border border-gray-700">
                             {viewingParticipantsEvent.participants?.length > 0 ? (
                                 <table className="w-full text-left">
                                     <thead className="sticky top-0 bg-gray-800 text-[10px] uppercase font-black text-gray-500 border-b border-gray-700">

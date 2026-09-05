@@ -183,7 +183,7 @@ const MonthlyDetailModal: React.FC<MonthlyDetailModalProps> = ({
                         </span>
                     </h4>
 
-                    <div className="bg-gray-900/50 rounded-lg border border-gray-700 overflow-hidden">
+                    <div className="bg-gray-900/50 rounded-lg border border-gray-700 overflow-x-auto">
                         {payments.length > 0 ? (
                             <table className="w-full text-sm text-left text-gray-400">
                                 <thead className="bg-gray-800 text-xs text-gray-300 uppercase">
