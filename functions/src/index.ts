@@ -277,6 +277,42 @@ export const purgeTrash = onSchedule({
     console.log(`[purgeTrash] Total purgado: ${totalPurged} documento(s).`);
 });
 
+// --- Backups automáticos de Firestore ---
+// Export nativo de Firestore a Cloud Storage (mismo mecanismo que "gcloud firestore export").
+// Corre bajo la identidad de la cuenta de servicio firebase-adminsdk (la misma que ya usa
+// mcp-server), en vez de la cuenta de servicio por defecto de la función, para no tener que dar
+// de alta un permiso nuevo por cada función que necesite exportar en el futuro.
+//
+// IMPORTANTE (paso manual único, no lo puede hacer este código): la cuenta de servicio
+// firebase-adminsdk-fbsvc@xen-dance-erp.iam.gserviceaccount.com necesita el rol
+// "Cloud Datastore Import Export Admin" (roles/datastore.importExportAdmin) en Google Cloud
+// Console → IAM. Sin ese rol, el export falla con PERMISSION_DENIED — verificado directamente
+// contra el proyecto real durante el desarrollo de esta función.
+import { v1 as firestoreAdminV1 } from '@google-cloud/firestore';
+
+const BACKUP_SERVICE_ACCOUNT = 'firebase-adminsdk-fbsvc@xen-dance-erp.iam.gserviceaccount.com';
+const BACKUP_BUCKET = 'gs://xen-dance-erp.firebasestorage.app/firestore-backups';
+
+export const scheduledFirestoreBackup = onSchedule({
+    schedule: '0 3 * * *', // Cada día a las 03:00, antes de la purga de la papelera (04:00)
+    timeZone: 'Europe/Madrid',
+    serviceAccount: BACKUP_SERVICE_ACCOUNT,
+    retryCount: 2,
+}, async () => {
+    const client = new firestoreAdminV1.FirestoreAdminClient();
+    const projectId = process.env.GCLOUD_PROJECT || 'xen-dance-erp';
+    const databaseName = client.databasePath(projectId, '(default)');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const outputUriPrefix = `${BACKUP_BUCKET}/${timestamp}`;
+
+    console.log(`[scheduledFirestoreBackup] Exportando a ${outputUriPrefix}...`);
+    const [operation] = await client.exportDocuments({
+        name: databaseName,
+        outputUriPrefix,
+    });
+    console.log(`[scheduledFirestoreBackup] Export en curso, operación: ${operation.name}`);
+});
+
 async function sendAnniversaryEmail(email: string, name: string, years: number) {
     const mailOptions = {
         from: '"Xen Dance Space" <info@xendance.space>',

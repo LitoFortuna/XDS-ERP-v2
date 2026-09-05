@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkSpecialDates = exports.studentLogin = exports.getVapidPublicKey = exports.onNewActivityLog = void 0;
+exports.scheduledFirestoreBackup = exports.purgeTrash = exports.checkSpecialDates = exports.studentLogin = exports.getVapidPublicKey = exports.onNewActivityLog = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
@@ -205,6 +205,70 @@ async function sendBirthdayEmail(email, name) {
     };
     return transporter.sendMail(mailOptions);
 }
+// --- Papelera: purga automática ---
+// Las colecciones con "borrado suave" (deletedAt en vez de deleteDoc real, ver
+// src/services/domain/trashService.ts). Pasados 30 días desde deletedAt, se borran de verdad.
+const TRASH_COLLECTIONS = ['students', 'classes', 'instructors', 'payments', 'costs', 'events', 'nuptialDances'];
+const PURGE_AFTER_DAYS = 30;
+/**
+ * Se ejecuta cada día a las 04:00 (Europe/Madrid, hora de bajo tráfico) y borra
+ * definitivamente cualquier documento marcado como borrado hace más de 30 días.
+ */
+exports.purgeTrash = (0, scheduler_1.onSchedule)({
+    schedule: '0 4 * * *',
+    timeZone: 'Europe/Madrid',
+}, async () => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - PURGE_AFTER_DAYS);
+    const cutoffIso = cutoff.toISOString();
+    let totalPurged = 0;
+    for (const collectionName of TRASH_COLLECTIONS) {
+        const snapshot = await admin.firestore()
+            .collection(collectionName)
+            .where('deletedAt', '<=', cutoffIso)
+            .get();
+        if (snapshot.empty)
+            continue;
+        const batch = admin.firestore().batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        console.log(`[purgeTrash] ${collectionName}: ${snapshot.size} documento(s) purgado(s) definitivamente.`);
+        totalPurged += snapshot.size;
+    }
+    console.log(`[purgeTrash] Total purgado: ${totalPurged} documento(s).`);
+});
+// --- Backups automáticos de Firestore ---
+// Export nativo de Firestore a Cloud Storage (mismo mecanismo que "gcloud firestore export").
+// Corre bajo la identidad de la cuenta de servicio firebase-adminsdk (la misma que ya usa
+// mcp-server), en vez de la cuenta de servicio por defecto de la función, para no tener que dar
+// de alta un permiso nuevo por cada función que necesite exportar en el futuro.
+//
+// IMPORTANTE (paso manual único, no lo puede hacer este código): la cuenta de servicio
+// firebase-adminsdk-fbsvc@xen-dance-erp.iam.gserviceaccount.com necesita el rol
+// "Cloud Datastore Import Export Admin" (roles/datastore.importExportAdmin) en Google Cloud
+// Console → IAM. Sin ese rol, el export falla con PERMISSION_DENIED — verificado directamente
+// contra el proyecto real durante el desarrollo de esta función.
+const firestore_2 = require("@google-cloud/firestore");
+const BACKUP_SERVICE_ACCOUNT = 'firebase-adminsdk-fbsvc@xen-dance-erp.iam.gserviceaccount.com';
+const BACKUP_BUCKET = 'gs://xen-dance-erp.firebasestorage.app/firestore-backups';
+exports.scheduledFirestoreBackup = (0, scheduler_1.onSchedule)({
+    schedule: '0 3 * * *', // Cada día a las 03:00, antes de la purga de la papelera (04:00)
+    timeZone: 'Europe/Madrid',
+    serviceAccount: BACKUP_SERVICE_ACCOUNT,
+    retryCount: 2,
+}, async () => {
+    const client = new firestore_2.v1.FirestoreAdminClient();
+    const projectId = process.env.GCLOUD_PROJECT || 'xen-dance-erp';
+    const databaseName = client.databasePath(projectId, '(default)');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const outputUriPrefix = `${BACKUP_BUCKET}/${timestamp}`;
+    console.log(`[scheduledFirestoreBackup] Exportando a ${outputUriPrefix}...`);
+    const [operation] = await client.exportDocuments({
+        name: databaseName,
+        outputUriPrefix,
+    });
+    console.log(`[scheduledFirestoreBackup] Export en curso, operación: ${operation.name}`);
+});
 async function sendAnniversaryEmail(email, name, years) {
     const mailOptions = {
         from: '"Xen Dance Space" <info@xendance.space>',
