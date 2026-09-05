@@ -508,7 +508,7 @@ const StudentList: React.FC<StudentListProps> = ({ students, classes, merchandis
             <p className="text-gray-300">
               ¿Estás seguro de que quieres eliminar a <span className="font-bold text-white">{studentToDelete.name}</span>?
             </p>
-            <p className="text-sm text-yellow-400 mt-2">Esta acción no se puede deshacer y se eliminarán todos los datos asociados.</p>
+            <p className="text-sm text-yellow-400 mt-2">Pasará a la Papelera; podrás restaurarlo desde ahí durante 30 días.</p>
             <div className="flex justify-end space-x-2 mt-6">
               <button onClick={() => setStudentToDelete(null)} className="bg-gray-600 text-gray-200 px-4 py-2 rounded-md hover:bg-gray-500">
                 Cancelar

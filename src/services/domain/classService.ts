@@ -1,12 +1,13 @@
 
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, writeBatch, Unsubscribe } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, writeBatch, Unsubscribe } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { DanceClass } from '../../../types';
+import { softDeleteDoc, restoreDoc, permanentlyDeleteDoc, filterActive } from './trashService';
 
 export const subscribeToClasses = (callback: (classes: DanceClass[]) => void): Unsubscribe => {
     const q = query(collection(db, 'classes'), orderBy('name'));
     return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DanceClass)));
+        callback(filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DanceClass))));
     });
 };
 
@@ -15,7 +16,7 @@ import { getDocs } from 'firebase/firestore';
 export const fetchClasses = async (): Promise<DanceClass[]> => {
     const q = query(collection(db, 'classes'), orderBy('name'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DanceClass));
+    return filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DanceClass)));
 };
 
 export const addClass = async (danceClass: Omit<DanceClass, 'id'>) => {
@@ -35,5 +36,13 @@ export const updateClass = async (danceClass: DanceClass) => {
 };
 
 export const deleteClass = async (classId: string) => {
-    await deleteDoc(doc(db, 'classes', classId));
+    await softDeleteDoc('classes', classId);
+};
+
+export const restoreClass = async (classId: string) => {
+    await restoreDoc('classes', classId);
+};
+
+export const permanentlyDeleteClass = async (classId: string) => {
+    await permanentlyDeleteDoc('classes', classId);
 };

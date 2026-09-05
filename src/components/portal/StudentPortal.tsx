@@ -4,6 +4,7 @@ import { Student, Payment, AttendanceRecord, DanceClass, MerchandiseItem, DanceE
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 import { getStudentPrivateData } from '../../services/domain/studentService';
+import { filterActive } from '../../services/domain/trashService';
 import { createChangeRequest, getChangeRequestsByStudent } from '../../../services/changeRequestService';
 import { getStudentProgress, getLevelInfo } from '../../../services/progressService';
 import BottomNavigation, { PortalPage } from './BottomNavigation';
@@ -46,7 +47,7 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
                 const results = await Promise.all([
                     // Payments
                     getDocs(query(collection(db, 'payments'), where('studentId', '==', student.id))).then(snap => {
-                        const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Payment));
+                        const data = filterActive(snap.docs.map(d => ({ id: d.id, ...d.data() } as Payment)));
                         const currentYear = new Date().getFullYear();
                         return data.filter(p => new Date(p.date).getFullYear() === currentYear)
                             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -60,7 +61,7 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
 
                     // Classes
                     getDocs(collection(db, 'classes')).then(snap =>
-                        snap.docs.map(d => ({ id: d.id, ...d.data() } as DanceClass))
+                        filterActive(snap.docs.map(d => ({ id: d.id, ...d.data() } as DanceClass)))
                     ),
 
                     // Merchandise
@@ -70,7 +71,7 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
 
                     // Events - fetch all and filter in memory to handle legacy data without 'studentIds'
                     getDocs(collection(db, 'events')).then(snap => {
-                        const allEvents = snap.docs.map(d => ({ id: d.id, ...d.data() } as DanceEvent));
+                        const allEvents = filterActive(snap.docs.map(d => ({ id: d.id, ...d.data() } as DanceEvent)));
                         return allEvents.filter(event =>
                             // Check both new array field and old participants array
                             (event.studentIds && event.studentIds.includes(student.id)) ||

@@ -7,25 +7,39 @@ import {
     addStudent as addStudentToDb,
     updateStudent as updateStudentInDb,
     deleteStudent as deleteStudentFromDb,
+    restoreStudent as restoreStudentInDb,
+    permanentlyDeleteStudent as permanentlyDeleteStudentFromDb,
     addInstructor as addInstructorToDb,
     updateInstructor as updateInstructorInDb,
     deleteInstructor as deleteInstructorFromDb,
+    restoreInstructor as restoreInstructorInDb,
+    permanentlyDeleteInstructor as permanentlyDeleteInstructorFromDb,
     addClass as addClassToDb,
     updateClass as updateClassInDb,
     deleteClass as deleteClassFromDb,
+    restoreClass as restoreClassInDb,
+    permanentlyDeleteClass as permanentlyDeleteClassFromDb,
     addPayment as addPaymentToDb,
     updatePayment as updatePaymentInDb,
     deletePayment as deletePaymentFromDb,
+    restorePayment as restorePaymentInDb,
+    permanentlyDeletePayment as permanentlyDeletePaymentFromDb,
     batchAddPayments as batchAddPaymentsToDb,
     addCost as addCostToDb,
     updateCost as updateCostInDb,
     deleteCost as deleteCostFromDb,
+    restoreCost as restoreCostInDb,
+    permanentlyDeleteCost as permanentlyDeleteCostFromDb,
     addNuptialDance as addNuptialDanceToDb,
     updateNuptialDance as updateNuptialDanceInDb,
     deleteNuptialDance as deleteNuptialDanceFromDb,
+    restoreNuptialDance as restoreNuptialDanceInDb,
+    permanentlyDeleteNuptialDance as permanentlyDeleteNuptialDanceFromDb,
     addEvent as addEventToDb,
     updateEvent as updateEventInDb,
     deleteEvent as deleteEventFromDb,
+    restoreEvent as restoreEventInDb,
+    permanentlyDeleteEvent as permanentlyDeleteEventFromDb,
     addMerchandiseItem as addMerchandiseItemToDb,
     updateMerchandiseItem as updateMerchandiseItemInDb,
     deleteMerchandiseItem as deleteMerchandiseItemFromDb,
@@ -69,6 +83,16 @@ export const useAppActions = () => {
         queryClient.invalidateQueries({ queryKey: ['students'] });
     };
 
+    const restoreStudent = async (studentId: string) => {
+        await restoreStudentInDb(studentId);
+        queryClient.invalidateQueries({ queryKey: ['students'] });
+    };
+
+    const permanentlyDeleteStudent = async (studentId: string) => {
+        await permanentlyDeleteStudentFromDb(studentId);
+        queryClient.invalidateQueries({ queryKey: ['students'] });
+    };
+
     const addInstructor = async (instructor: Omit<Instructor, 'id'>) => {
         await addInstructorToDb({
             ...instructor,
@@ -90,6 +114,16 @@ export const useAppActions = () => {
             return;
         }
         await deleteInstructorFromDb(instructorId);
+        queryClient.invalidateQueries({ queryKey: ['instructors'] });
+    };
+
+    const restoreInstructor = async (instructorId: string) => {
+        await restoreInstructorInDb(instructorId);
+        queryClient.invalidateQueries({ queryKey: ['instructors'] });
+    };
+
+    const permanentlyDeleteInstructor = async (instructorId: string) => {
+        await permanentlyDeleteInstructorFromDb(instructorId);
         queryClient.invalidateQueries({ queryKey: ['instructors'] });
     };
 
@@ -116,6 +150,16 @@ export const useAppActions = () => {
         await deleteClassFromDb(classId);
         queryClient.invalidateQueries({ queryKey: ['classes'] });
         queryClient.invalidateQueries({ queryKey: ['students'] });
+    };
+
+    const restoreClass = async (classId: string) => {
+        await restoreClassInDb(classId);
+        queryClient.invalidateQueries({ queryKey: ['classes'] });
+    };
+
+    const permanentlyDeleteClass = async (classId: string) => {
+        await permanentlyDeleteClassFromDb(classId);
+        queryClient.invalidateQueries({ queryKey: ['classes'] });
     };
 
     const addPayment = async (payment: Omit<Payment, 'id'>) => {
@@ -160,6 +204,16 @@ export const useAppActions = () => {
         queryClient.invalidateQueries({ queryKey: ['payments'] });
     };
 
+    const restorePayment = async (paymentId: string) => {
+        await restorePaymentInDb(paymentId);
+        queryClient.invalidateQueries({ queryKey: ['payments'] });
+    };
+
+    const permanentlyDeletePayment = async (paymentId: string) => {
+        await permanentlyDeletePaymentFromDb(paymentId);
+        queryClient.invalidateQueries({ queryKey: ['payments'] });
+    };
+
     const addCost = async (cost: Omit<Cost, 'id'>) => {
         await addCostToDb(cost);
         queryClient.invalidateQueries({ queryKey: ['costs'] });
@@ -186,6 +240,16 @@ export const useAppActions = () => {
         queryClient.invalidateQueries({ queryKey: ['costs'] });
     };
 
+    const restoreCost = async (costId: string) => {
+        await restoreCostInDb(costId);
+        queryClient.invalidateQueries({ queryKey: ['costs'] });
+    };
+
+    const permanentlyDeleteCost = async (costId: string) => {
+        await permanentlyDeleteCostFromDb(costId);
+        queryClient.invalidateQueries({ queryKey: ['costs'] });
+    };
+
     const addNuptialDance = async (dance: Omit<NuptialDance, 'id'>) => {
         await addNuptialDanceToDb(dance);
         queryClient.invalidateQueries({ queryKey: ['nuptialDances'] });
@@ -198,6 +262,16 @@ export const useAppActions = () => {
 
     const deleteNuptialDance = async (danceId: string) => {
         await deleteNuptialDanceFromDb(danceId);
+        queryClient.invalidateQueries({ queryKey: ['nuptialDances'] });
+    };
+
+    const restoreNuptialDance = async (danceId: string) => {
+        await restoreNuptialDanceInDb(danceId);
+        queryClient.invalidateQueries({ queryKey: ['nuptialDances'] });
+    };
+
+    const permanentlyDeleteNuptialDance = async (danceId: string) => {
+        await permanentlyDeleteNuptialDanceFromDb(danceId);
         queryClient.invalidateQueries({ queryKey: ['nuptialDances'] });
     };
 
@@ -215,6 +289,16 @@ export const useAppActions = () => {
 
     const deleteEvent = async (eventId: string) => {
         await deleteEventFromDb(eventId);
+        queryClient.invalidateQueries({ queryKey: ['events'] });
+    };
+
+    const restoreEvent = async (eventId: string) => {
+        await restoreEventInDb(eventId);
+        queryClient.invalidateQueries({ queryKey: ['events'] });
+    };
+
+    const permanentlyDeleteEvent = async (eventId: string) => {
+        await permanentlyDeleteEventFromDb(eventId);
         queryClient.invalidateQueries({ queryKey: ['events'] });
     };
 
@@ -302,13 +386,13 @@ export const useAppActions = () => {
     };
 
     return {
-        addStudent, updateStudent, deleteStudent,
-        addInstructor, updateInstructor, deleteInstructor,
-        addClass, updateClass, deleteClass,
-        addPayment, updatePayment, deletePayment, addPaymentsBatch,
-        addCost, updateCost, deleteCost,
-        addNuptialDance, updateNuptialDance, deleteNuptialDance,
-        addEvent, updateEvent, deleteEvent,
+        addStudent, updateStudent, deleteStudent, restoreStudent, permanentlyDeleteStudent,
+        addInstructor, updateInstructor, deleteInstructor, restoreInstructor, permanentlyDeleteInstructor,
+        addClass, updateClass, deleteClass, restoreClass, permanentlyDeleteClass,
+        addPayment, updatePayment, deletePayment, restorePayment, permanentlyDeletePayment, addPaymentsBatch,
+        addCost, updateCost, deleteCost, restoreCost, permanentlyDeleteCost,
+        addNuptialDance, updateNuptialDance, deleteNuptialDance, restoreNuptialDance, permanentlyDeleteNuptialDance,
+        addEvent, updateEvent, deleteEvent, restoreEvent, permanentlyDeleteEvent,
         addMerchandiseItem, updateMerchandiseItem, deleteMerchandiseItem,
         addMerchandiseSale, deleteMerchandiseSale,
         saveAttendance,

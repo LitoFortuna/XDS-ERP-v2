@@ -238,6 +238,45 @@ async function sendBirthdayEmail(email: string, name: string) {
     return transporter.sendMail(mailOptions);
 }
 
+// --- Papelera: purga automática ---
+// Las colecciones con "borrado suave" (deletedAt en vez de deleteDoc real, ver
+// src/services/domain/trashService.ts). Pasados 30 días desde deletedAt, se borran de verdad.
+const TRASH_COLLECTIONS = ['students', 'classes', 'instructors', 'payments', 'costs', 'events', 'nuptialDances'];
+const PURGE_AFTER_DAYS = 30;
+
+/**
+ * Se ejecuta cada día a las 04:00 (Europe/Madrid, hora de bajo tráfico) y borra
+ * definitivamente cualquier documento marcado como borrado hace más de 30 días.
+ */
+export const purgeTrash = onSchedule({
+    schedule: '0 4 * * *',
+    timeZone: 'Europe/Madrid',
+}, async () => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - PURGE_AFTER_DAYS);
+    const cutoffIso = cutoff.toISOString();
+
+    let totalPurged = 0;
+
+    for (const collectionName of TRASH_COLLECTIONS) {
+        const snapshot = await admin.firestore()
+            .collection(collectionName)
+            .where('deletedAt', '<=', cutoffIso)
+            .get();
+
+        if (snapshot.empty) continue;
+
+        const batch = admin.firestore().batch();
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+
+        console.log(`[purgeTrash] ${collectionName}: ${snapshot.size} documento(s) purgado(s) definitivamente.`);
+        totalPurged += snapshot.size;
+    }
+
+    console.log(`[purgeTrash] Total purgado: ${totalPurged} documento(s).`);
+});
+
 async function sendAnniversaryEmail(email: string, name: string, years: number) {
     const mailOptions = {
         from: '"Xen Dance Space" <info@xendance.space>',

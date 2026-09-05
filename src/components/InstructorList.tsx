@@ -194,7 +194,7 @@ const InstructorList: React.FC<InstructorListProps> = ({ instructors, classes, a
   };
   
   const handleDelete = (id: string) => {
-    if (window.confirm('¿Estás seguro de que quieres eliminar a este profesor? Esta acción no se puede deshacer.')) {
+    if (window.confirm('¿Estás seguro de que quieres eliminar a este profesor? Pasará a la Papelera; podrás restaurarlo desde ahí durante 30 días.')) {
         deleteInstructor(id);
     }
   };

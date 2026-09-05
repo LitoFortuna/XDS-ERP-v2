@@ -13,6 +13,7 @@ import { HeartIcon } from './icons/HeartIcon';
 import { ShoppingBagIcon } from './icons/ShoppingBagIcon';
 import { ClipboardCheckIcon } from './icons/ClipboardCheckIcon';
 import { StarIcon } from './icons/StarIcon';
+import { TrashIcon } from './icons/TrashIcon';
 import ActivityNotificationBell from './ActivityNotificationBell';
 
 interface SidebarProps {
@@ -40,6 +41,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isOpen, setIsOp
     { view: View.QUARTERLY_INVOICING, label: 'Facturas Trim.', icon: DocumentTextIcon },
     { view: View.MERCHANDISING, label: 'Merchandising', icon: ShoppingBagIcon },
     { view: View.DATA_MANAGEMENT, label: 'Gestión de Datos', icon: DatabaseIcon },
+    { view: View.TRASH, label: 'Papelera', icon: TrashIcon },
   ];
 
   const handleNavItemClick = (view: View) => {

@@ -1,19 +1,20 @@
 
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDocs, Unsubscribe } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, getDocs, Unsubscribe } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { NuptialDance } from '../../../types';
+import { softDeleteDoc, restoreDoc, permanentlyDeleteDoc, filterActive } from './trashService';
 
 export const subscribeToNuptialDances = (callback: (dances: NuptialDance[]) => void): Unsubscribe => {
     const q = query(collection(db, 'nuptialDances'), orderBy('weddingDate', 'desc'));
     return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NuptialDance)));
+        callback(filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NuptialDance))));
     });
 };
 
 export const fetchNuptialDances = async (): Promise<NuptialDance[]> => {
     const q = query(collection(db, 'nuptialDances'), orderBy('weddingDate', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NuptialDance));
+    return filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NuptialDance)));
 };
 
 export const addNuptialDance = async (dance: Omit<NuptialDance, 'id'>) => {
@@ -26,5 +27,13 @@ export const updateNuptialDance = async (dance: NuptialDance) => {
 };
 
 export const deleteNuptialDance = async (danceId: string) => {
-    await deleteDoc(doc(db, 'nuptialDances', danceId));
+    await softDeleteDoc('nuptialDances', danceId);
+};
+
+export const restoreNuptialDance = async (danceId: string) => {
+    await restoreDoc('nuptialDances', danceId);
+};
+
+export const permanentlyDeleteNuptialDance = async (danceId: string) => {
+    await permanentlyDeleteDoc('nuptialDances', danceId);
 };

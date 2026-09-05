@@ -358,7 +358,7 @@ const ClassSchedule: React.FC<ClassScheduleProps> = ({ classes, instructors, stu
     if (!danceClass) return;
 
     const enrolledCount = students.filter(s => s.enrolledClassIds.includes(classId)).length;
-    let confirmationMessage = `¿Estás seguro de que quieres eliminar la clase "${danceClass.name}"? Esta acción no se puede deshacer.`;
+    let confirmationMessage = `¿Estás seguro de que quieres eliminar la clase "${danceClass.name}"? Pasará a la Papelera; podrás restaurarla desde ahí durante 30 días.`;
 
     if (enrolledCount > 0) {
       confirmationMessage += `\n\nADVERTENCIA: Hay ${enrolledCount} alumno(s) inscrito(s) en esta clase. Se desinscribirán automáticamente.`;

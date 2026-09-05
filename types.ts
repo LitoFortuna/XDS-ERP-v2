@@ -17,6 +17,7 @@ export interface Student {
   active: boolean;
   notes?: string;
   feeExceptions?: { [key: string]: number }; // Key: "YYYY-M", Value: specific amount for that month
+  deletedAt?: string; // ISO timestamp. Presente = en la Papelera, no se borra de verdad hasta pasar 30 días.
 }
 
 // dni/iban live in students/{id}/private/sensitive, NOT on the main Student doc, which is
@@ -36,6 +37,7 @@ export interface Instructor {
   active: boolean;
   hireDate: string; // YYYY-MM-DD
   notes?: string;
+  deletedAt?: string;
 }
 
 export type DayOfWeek = 'Lunes' | 'Martes' | 'Miércoles' | 'Jueves' | 'Viernes' | 'Sábado' | 'Domingo';
@@ -52,6 +54,7 @@ export interface DanceClass {
   capacity: number;
   baseRate: number;
   instructorName?: string; // Populated at runtime for display
+  deletedAt?: string;
 }
 
 
@@ -63,6 +66,7 @@ export interface Payment {
   concept: string;
   paymentMethod: PaymentMethod;
   notes?: string;
+  deletedAt?: string;
 }
 
 export type CostCategory = 'Profesores' | 'Alquiler' | 'Suministros' | 'Licencias' | 'Impuestos' | 'Marketing' | 'Mantenimiento' | 'Otros';
@@ -78,6 +82,7 @@ export interface Cost {
   isRecurring: boolean;
   notes?: string;
   relatedInstructorId?: string; // Optional link to an instructor for better analytics
+  deletedAt?: string;
 }
 
 export interface Rehearsal {
@@ -102,6 +107,7 @@ export interface NuptialDance {
   totalCost: number;
   paidAmount: number;
   notes?: string;
+  deletedAt?: string;
 }
 
 export type EventType = 'Competición' | 'Exhibición' | 'Taller' | 'Otro';
@@ -123,6 +129,7 @@ export interface DanceEvent {
   participants: EventParticipant[];
   notes?: string;
   imageUrl?: string; // Nuevo campo para el cartel del evento
+  deletedAt?: string;
 }
 
 export interface MerchandiseItem {
@@ -171,6 +178,7 @@ export enum View {
   ATTENDANCE = 'ATTENDANCE',
   EVENTS = 'EVENTS',
   CHANGE_REQUESTS = 'CHANGE_REQUESTS',
+  TRASH = 'TRASH',
 }
 
 export type UserRole = 'SuperAdmin' | 'Admin' | 'Editor' | 'Instructor' | 'Student';

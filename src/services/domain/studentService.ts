@@ -1,7 +1,8 @@
 
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, writeBatch, Unsubscribe } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, writeBatch, Unsubscribe } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Student, StudentPrivateData } from '../../../types';
+import { softDeleteDoc, restoreDoc, permanentlyDeleteDoc, filterActive } from './trashService';
 
 // DNI/IBAN live in students/{id}/private/sensitive, not on the public student doc — see
 // firestore.rules for why (that doc is public-read for the Student Portal, this one isn't).
@@ -42,7 +43,7 @@ export const batchSetStudentPrivateData = async (entries: { studentId: string; d
 export const subscribeToStudents = (callback: (students: Student[]) => void): Unsubscribe => {
     const q = query(collection(db, 'students'), orderBy('name'));
     return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student)));
+        callback(filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student))));
     });
 };
 
@@ -51,7 +52,7 @@ import { getDocs, where } from 'firebase/firestore';
 export const fetchStudents = async (): Promise<Student[]> => {
     const q = query(collection(db, 'students'), orderBy('name'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+    return filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student)));
 };
 
 export const findStudentByPhone = async (phone: string): Promise<Student | null> => {
@@ -90,5 +91,13 @@ export const updateStudent = async (student: Student) => {
 };
 
 export const deleteStudent = async (studentId: string) => {
-    await deleteDoc(doc(db, 'students', studentId));
+    await softDeleteDoc('students', studentId);
+};
+
+export const restoreStudent = async (studentId: string) => {
+    await restoreDoc('students', studentId);
+};
+
+export const permanentlyDeleteStudent = async (studentId: string) => {
+    await permanentlyDeleteDoc('students', studentId);
 };

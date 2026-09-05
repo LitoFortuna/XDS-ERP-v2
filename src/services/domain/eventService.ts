@@ -1,19 +1,20 @@
 
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDocs, Unsubscribe } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, getDocs, Unsubscribe } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { DanceEvent } from '../../../types';
+import { softDeleteDoc, restoreDoc, permanentlyDeleteDoc, filterActive } from './trashService';
 
 export const subscribeToEvents = (callback: (events: DanceEvent[]) => void): Unsubscribe => {
     const q = query(collection(db, 'events'), orderBy('date', 'desc'));
     return onSnapshot(q, (snapshot) => {
-        callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DanceEvent)));
+        callback(filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DanceEvent))));
     });
 };
 
 export const fetchEvents = async (): Promise<DanceEvent[]> => {
     const q = query(collection(db, 'events'), orderBy('date', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DanceEvent));
+    return filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DanceEvent)));
 };
 
 export const addEvent = async (event: Omit<DanceEvent, 'id'>) => {
@@ -26,5 +27,13 @@ export const updateEvent = async (event: DanceEvent) => {
 };
 
 export const deleteEvent = async (eventId: string) => {
-    await deleteDoc(doc(db, 'events', eventId));
+    await softDeleteDoc('events', eventId);
+};
+
+export const restoreEvent = async (eventId: string) => {
+    await restoreDoc('events', eventId);
+};
+
+export const permanentlyDeleteEvent = async (eventId: string) => {
+    await permanentlyDeleteDoc('events', eventId);
 };
