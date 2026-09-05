@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.scheduledFirestoreBackup = exports.purgeTrash = exports.checkSpecialDates = exports.studentLogin = exports.getVapidPublicKey = exports.onNewActivityLog = void 0;
+exports.paymentReminders = exports.scheduledFirestoreBackup = exports.purgeTrash = exports.checkSpecialDates = exports.studentLogin = exports.getVapidPublicKey = exports.onNewActivityLog = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
@@ -269,6 +269,104 @@ exports.scheduledFirestoreBackup = (0, scheduler_1.onSchedule)({
     });
     console.log(`[scheduledFirestoreBackup] Export en curso, operación: ${operation.name}`);
 });
+// --- Recordatorio automático de cuota impagada ---
+// Corre cada lunes; recalcula el estado de pago del mes actual con la MISMA lógica de prioridad
+// que Billing.tsx/getPaymentStatusForMonth (feeException puntual > augustMaintenanceFee en agosto
+// > monthlyFee), y envía un email a quien tenga pendiente algo de esa cuota. Solo a alumnos que NO
+// pagan por domiciliación -- ese cobro es automático, "recordar" no tiene sentido y solo confunde
+// si el cargo bancario todavía no se ha procesado. Un cooldown de varios días evita reenviar el
+// mismo aviso cada semana sin parar mientras siga sin pagarse.
+const REMINDER_COOLDOWN_DAYS = 6;
+const REMINDER_MIN_DAY_OF_MONTH = 5; // margen para que dé tiempo a registrar pagos de principio de mes
+const MONTH_NAMES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+exports.paymentReminders = (0, scheduler_1.onSchedule)({
+    schedule: '0 10 * * 1', // Lunes a las 10:00
+    timeZone: 'Europe/Madrid',
+}, async () => {
+    var _a, _b, _c, _d;
+    const now = new Date();
+    if (now.getDate() < REMINDER_MIN_DAY_OF_MONTH) {
+        console.log('[paymentReminders] Demasiado pronto en el mes, no se envían recordatorios todavía.');
+        return;
+    }
+    const year = now.getFullYear();
+    const monthIndex = now.getMonth(); // 0-indexado, igual que feeExceptions/augustMaintenanceFee
+    const monthStr = String(monthIndex + 1).padStart(2, '0');
+    const exceptionKey = `${year}-${monthIndex}`;
+    const [studentsSnap, paymentsSnap] = await Promise.all([
+        admin.firestore().collection('students').where('active', '==', true).get(),
+        admin.firestore().collection('payments')
+            .where('date', '>=', `${year}-${monthStr}-01`)
+            .where('date', '<=', `${year}-${monthStr}-31`)
+            .get(),
+    ]);
+    const paidByStudent = new Map();
+    paymentsSnap.forEach(doc => {
+        const p = doc.data();
+        paidByStudent.set(p.studentId, (paidByStudent.get(p.studentId) || 0) + p.amount);
+    });
+    let sent = 0;
+    for (const doc of studentsSnap.docs) {
+        const student = doc.data();
+        if (student.deletedAt)
+            continue;
+        if (student.paymentMethod === 'Domiciliación')
+            continue;
+        if (!student.email)
+            continue;
+        // Alta posterior a hoy, o baja antes de empezar este mes -> no corresponde cuota.
+        if (student.enrollmentDate && new Date(student.enrollmentDate) > now)
+            continue;
+        if (student.deactivationDate && new Date(student.deactivationDate) < new Date(year, monthIndex, 1))
+            continue;
+        const expectedFee = ((_a = student.feeExceptions) === null || _a === void 0 ? void 0 : _a[exceptionKey]) !== undefined
+            ? student.feeExceptions[exceptionKey]
+            : (monthIndex === 7 && student.augustMaintenanceFee !== undefined ? student.augustMaintenanceFee : student.monthlyFee);
+        if (!expectedFee || expectedFee <= 0)
+            continue; // exento este mes
+        const paid = paidByStudent.get(doc.id) || 0;
+        if (paid >= expectedFee)
+            continue; // al día
+        const reminderRef = admin.firestore().collection('paymentReminders').doc(`${doc.id}_${year}-${monthIndex}`);
+        const reminderDoc = await reminderRef.get();
+        if (reminderDoc.exists) {
+            const lastSent = (_d = (_c = (_b = reminderDoc.data()) === null || _b === void 0 ? void 0 : _b.lastSentAt) === null || _c === void 0 ? void 0 : _c.toDate) === null || _d === void 0 ? void 0 : _d.call(_c);
+            if (lastSent && (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60 * 24) < REMINDER_COOLDOWN_DAYS) {
+                continue;
+            }
+        }
+        try {
+            await sendPaymentReminderEmail(student.email, student.name, expectedFee - paid, monthIndex);
+            await reminderRef.set({
+                studentId: doc.id,
+                lastSentAt: admin.firestore.FieldValue.serverTimestamp(),
+                count: admin.firestore.FieldValue.increment(1),
+            }, { merge: true });
+            sent++;
+        }
+        catch (err) {
+            console.error(`[paymentReminders] Error enviando a ${student.email}:`, err);
+        }
+    }
+    console.log(`[paymentReminders] Recordatorios enviados: ${sent}`);
+});
+async function sendPaymentReminderEmail(email, name, pending, monthIndex) {
+    const mailOptions = {
+        from: '"Xen Dance Space" <info@xendance.space>',
+        to: email,
+        subject: 'Recordatorio: cuota pendiente en Xen Dance Space',
+        html: `
+            <div style="font-family: sans-serif; text-align: center; color: #333;">
+                <h1 style="color: #6b21a8;">Hola, ${name.split(' ')[0]} 👋</h1>
+                <p>Te escribimos para recordarte que tienes pendiente el pago de <strong>${pending.toFixed(2)}€</strong> correspondiente a la cuota de ${MONTH_NAMES_ES[monthIndex]}.</p>
+                <p>Si ya lo has abonado, ignora este mensaje — puede que aún no lo hayamos registrado.</p>
+                <p>Cualquier duda, contáctanos respondiendo a este correo.</p>
+                <div style="margin-top: 20px;"><p>¡Gracias! 💜</p></div>
+            </div>
+        `
+    };
+    return transporter.sendMail(mailOptions);
+}
 async function sendAnniversaryEmail(email, name, years) {
     const mailOptions = {
         from: '"Xen Dance Space" <info@xendance.space>',
