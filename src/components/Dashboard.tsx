@@ -1,5 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { fetchAllStudentPrivateData } from '../services/domain/studentService';
+import { View } from '../../types';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
     ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell,
@@ -124,6 +126,24 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
         }
         return years;
     }, [students, payments, realToday]);
+
+    // Alumnos activos que cobran por domiciliación pero no tienen IBAN en la ficha: sin eso, la
+    // conciliación bancaria mensual nunca podrá emparejarlos (ver BankReconciliation.tsx).
+    const [studentsMissingIban, setStudentsMissingIban] = useState<string[]>([]);
+    useEffect(() => {
+        const directDebitStudents = students.filter(s => s.active && s.paymentMethod === 'Domiciliación');
+        if (directDebitStudents.length === 0) {
+            setStudentsMissingIban([]);
+            return;
+        }
+        let cancelled = false;
+        fetchAllStudentPrivateData(directDebitStudents.map(s => s.id)).then(privateDataMap => {
+            if (cancelled) return;
+            const missing = directDebitStudents.filter(s => !privateDataMap[s.id]?.iban).map(s => s.name);
+            setStudentsMissingIban(missing);
+        }).catch(() => { /* no bloquea el resto del dashboard si esto falla */ });
+        return () => { cancelled = true; };
+    }, [students]);
 
     const [selectedRentMonth, setSelectedRentMonth] = useState(currentMonth);
     const [selectedCostMonth, setSelectedCostMonth] = useState(currentMonth); // New state for expenses chart
@@ -726,6 +746,25 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                     ))}
                 </div>
             </div>
+
+            {studentsMissingIban.length > 0 && (
+                <div
+                    onClick={() => setView(View.STUDENTS)}
+                    className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-amber-500/15 transition-colors"
+                >
+                    <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 flex-shrink-0">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-amber-300">
+                            {studentsMissingIban.length} alumno{studentsMissingIban.length > 1 ? 's' : ''} con domiciliación sin cuenta bancaria
+                        </p>
+                        <p className="text-xs text-amber-400/80 mt-0.5">
+                            {studentsMissingIban.slice(0, 5).join(', ')}{studentsMissingIban.length > 5 ? ` y ${studentsMissingIban.length - 5} más` : ''} — sin IBAN no se podrán conciliar sus cobros bancarios.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             {/* FILA 1: KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
