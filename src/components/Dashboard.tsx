@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { fetchAllStudentPrivateData } from '../services/domain/studentService';
 import { getExpectedFee } from '../utils/paymentStatus';
+import { findStudentsAtRisk } from '../utils/attendanceRisk';
 import { View } from '../../types';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -145,6 +146,13 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
         }).catch(() => { /* no bloquea el resto del dashboard si esto falla */ });
         return () => { cancelled = true; };
     }, [students]);
+
+    // Alumnos activos que han faltado a sus últimas 3 sesiones seguidas -- señal simple de riesgo
+    // de abandono, para poder llamarles antes de que causen baja en vez de después.
+    const studentsAtRisk = useMemo(
+        () => findStudentsAtRisk(students, attendanceRecords),
+        [students, attendanceRecords]
+    );
 
     const [selectedRentMonth, setSelectedRentMonth] = useState(currentMonth);
     const [selectedCostMonth, setSelectedCostMonth] = useState(currentMonth); // New state for expenses chart
@@ -761,6 +769,26 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                         </p>
                         <p className="text-xs text-amber-400/80 mt-0.5">
                             {studentsMissingIban.slice(0, 5).join(', ')}{studentsMissingIban.length > 5 ? ` y ${studentsMissingIban.length - 5} más` : ''} — sin IBAN no se podrán conciliar sus cobros bancarios.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {studentsAtRisk.length > 0 && (
+                <div
+                    onClick={() => setView(View.ATTENDANCE)}
+                    className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 flex items-center gap-4 cursor-pointer hover:bg-rose-500/15 transition-colors"
+                >
+                    <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-400 flex-shrink-0">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 17l-4 4m0 0l-4-4m4 4V3" /></svg>
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-rose-300">
+                            {studentsAtRisk.length} alumno{studentsAtRisk.length > 1 ? 's' : ''} en riesgo de abandono
+                        </p>
+                        <p className="text-xs text-rose-400/80 mt-0.5">
+                            {studentsAtRisk.slice(0, 5).map(s => `${s.studentName} (${s.missedStreak} clases seguidas sin venir)`).join(', ')}
+                            {studentsAtRisk.length > 5 ? ` y ${studentsAtRisk.length - 5} más` : ''} — puede merecer la pena contactarles.
                         </p>
                     </div>
                 </div>
