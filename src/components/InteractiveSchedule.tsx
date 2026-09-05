@@ -111,8 +111,9 @@ const InteractiveSchedule: React.FC<InteractiveScheduleProps> = ({ classes, inst
         }
     };
 
-    // 48 slots de 15 min (8:00-13:00 y 15:00-22:00)
-    const totalRows = 48; 
+    // 52 slots de 15 min (8:00-13:00 y 15:00-23:00). Antes llegaba solo hasta las 22:00 en punto
+    // y "Salsa" (Miércoles 21:35-22:30) se salía del rango explícito de la cuadrícula.
+    const totalRows = 52;
     const rowHeight = '20px'; // Compactado para máxima visibilidad
 
     return (
@@ -147,7 +148,7 @@ const InteractiveSchedule: React.FC<InteractiveScheduleProps> = ({ classes, inst
                         className="relative min-w-[1000px] p-2 bg-[#0f172a]"
                     >
                         {/* Etiquetas de Tiempo */}
-                        {Array.from({ length: 15 }, (_, i) => i + 8)
+                        {Array.from({ length: 16 }, (_, i) => i + 8)
                             .filter(hour => hour < 13 || hour >= 15)
                             .map((hour, idx) => {
                                 const row = idx * 4 + 2;
