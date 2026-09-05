@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { fetchAllStudentPrivateData } from '../services/domain/studentService';
+import { getExpectedFee } from '../utils/paymentStatus';
 import { View } from '../../types';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -233,10 +234,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                     });
                     const paid = paymentsForMonth.reduce((sum, p) => sum + p.amount, 0);
 
-                    const exceptionKey = `${selectedYear}-${m}`;
-                    const expected = student.feeExceptions?.[exceptionKey] !== undefined
-                        ? student.feeExceptions[exceptionKey]
-                        : (m === 7 && student.augustMaintenanceFee !== undefined ? student.augustMaintenanceFee : student.monthlyFee);
+                    const expected = getExpectedFee(student, selectedYear, m);
 
                     if (paid < expected) {
                         unpaidMonths.push(monthShortNames[m]);

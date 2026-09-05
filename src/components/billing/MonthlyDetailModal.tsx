@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Payment, Student, PaymentMethod } from '../../../types';
 import Modal from '../Modal';
+import { getExpectedFee } from '../../utils/paymentStatus';
 
 interface MonthlyDetailModalProps {
     isOpen: boolean;
@@ -33,15 +34,8 @@ const MonthlyDetailModal: React.FC<MonthlyDetailModalProps> = ({
     const monthName = months[monthIndex];
     const exceptionKey = `${year}-${monthIndex}`;
 
-    // La cuota "por defecto" de un mes es la mensual normal, salvo agosto (índice 7) si el
-    // alumno tiene una cuota de mantenimiento negociada — ver types.ts (Student.augustMaintenanceFee).
-    const getDefaultFeeForMonth = (s: Student, mIndex: number): number =>
-        mIndex === 7 && s.augustMaintenanceFee !== undefined ? s.augustMaintenanceFee : s.monthlyFee;
-
     // Calculate initial fee including exceptions
-    const currentMonthFee = student.feeExceptions?.[exceptionKey] !== undefined
-        ? student.feeExceptions[exceptionKey]
-        : getDefaultFeeForMonth(student, monthIndex);
+    const currentMonthFee = getExpectedFee(student, year, monthIndex);
 
     const [monthSpecificFee, setMonthSpecificFee] = useState(currentMonthFee);
     const [isFeeDirty, setIsFeeDirty] = useState(false);
@@ -61,9 +55,7 @@ const MonthlyDetailModal: React.FC<MonthlyDetailModalProps> = ({
 
     useEffect(() => {
         if (isOpen) {
-            const feeForThisMonth = student.feeExceptions?.[`${year}-${monthIndex}`] !== undefined
-                ? student.feeExceptions[`${year}-${monthIndex}`]
-                : getDefaultFeeForMonth(student, monthIndex);
+            const feeForThisMonth = getExpectedFee(student, year, monthIndex);
 
             setMonthSpecificFee(feeForThisMonth);
 
@@ -82,7 +74,9 @@ const MonthlyDetailModal: React.FC<MonthlyDetailModalProps> = ({
 
     const handleSaveSpecificFee = () => {
         const updatedExceptions = { ...student.feeExceptions };
-        if (monthSpecificFee === getDefaultFeeForMonth(student, monthIndex)) {
+        const { [exceptionKey]: _ignoredException, ...exceptionsWithoutThisMonth } = updatedExceptions;
+        const defaultFeeWithoutException = getExpectedFee({ ...student, feeExceptions: exceptionsWithoutThisMonth }, year, monthIndex);
+        if (monthSpecificFee === defaultFeeWithoutException) {
             delete updatedExceptions[exceptionKey];
         } else {
             updatedExceptions[exceptionKey] = monthSpecificFee;

@@ -10,6 +10,7 @@ import MonthlyDetailModal from './billing/MonthlyDetailModal';
 import PaymentForm from './billing/PaymentForm';
 import CostForm from './billing/CostForm';
 import BankReconciliation from './billing/BankReconciliation';
+import { getPaymentStatusForMonth as getPaymentStatusForMonthPure, MonthStatus } from '../utils/paymentStatus';
 
 
 const formatCurrency = (v: number, decimals: number = 2) => {
@@ -152,67 +153,36 @@ const Billing: React.FC<BillingProps> = React.memo(() => {
     const totalCosts = filteredCosts.reduce((sum, c) => sum + c.amount, 0);
 
     const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    const currentMonthIndex = new Date().getMonth();
-    const realCurrentYear = new Date().getFullYear();
 
-    type MonthStatus = 'paid' | 'partial' | 'unpaid' | 'exempt' | 'na';
-
-    // Orden de prioridad: un feeException puntual para ese mes concreto > la cuota de
-    // mantenimiento de agosto del alumno (si tiene, y el mes es agosto) > la cuota mensual normal.
-    // Así, una vez un alumno tiene su augustMaintenanceFee guardado, cada agosto siguiente muestra
-    // el importe reducido correcto sin que haga falta crear un feeException a mano cada año.
-    const getExpectedFee = (student: Student, monthIndex: number): number => {
-        const exceptionKey = `${selectedYear}-${monthIndex}`;
-        if (student.feeExceptions?.[exceptionKey] !== undefined) return student.feeExceptions[exceptionKey];
-        if (monthIndex === 7 && student.augustMaintenanceFee !== undefined) return student.augustMaintenanceFee;
-        return student.monthlyFee;
-    };
-
+    // Lógica de negocio (qué cuota corresponde, si está pagada/parcial/impagada/exenta) vive en
+    // src/utils/paymentStatus.ts -- pura y con tests (ver src/utils/paymentStatus.test.ts). Esto
+    // solo traduce ese resultado al texto/color exacto que ya se mostraba antes de extraerla.
     const getPaymentStatusForMonth = (student: Student, monthIndex: number): { text: string; color: string; status: MonthStatus; amount: number } => {
-        // 1. Check for payments FIRST. If paid, always show it.
-        const paymentsForMonth = yearPayments.filter(p => {
-            const { month: pMonth, year: pYear } = parseDateLocal(p.date);
-            return p.studentId === student.id && pMonth === monthIndex;
-        });
-        const totalPaid = paymentsForMonth.reduce((sum, p) => sum + p.amount, 0);
-
+        const result = getPaymentStatusForMonthPure(student, selectedYear, monthIndex, payments);
         const baseClasses = "cursor-pointer transition-colors hover:brightness-110";
 
-        if (totalPaid > 0) {
-            const expectedFee = getExpectedFee(student, monthIndex);
-
-            if (expectedFee > 0 && totalPaid >= expectedFee) {
-                return { text: formatCurrency(totalPaid), color: `${baseClasses} bg-green-500/20 text-green-300`, status: 'paid', amount: totalPaid };
-            }
-            return { text: formatCurrency(totalPaid), color: `${baseClasses} bg-orange-500/20 text-orange-300`, status: 'partial', amount: totalPaid };
+        switch (result.status) {
+            case 'paid':
+                return { text: formatCurrency(result.amount), color: `${baseClasses} bg-green-500/20 text-green-300`, status: 'paid', amount: result.amount };
+            case 'partial':
+                return { text: formatCurrency(result.amount), color: `${baseClasses} bg-orange-500/20 text-orange-300`, status: 'partial', amount: result.amount };
+            case 'exempt':
+                return { text: 'Exento', color: `${baseClasses} bg-gray-600 text-gray-300`, status: 'exempt', amount: 0 };
+            case 'unpaid':
+                return { text: 'Impagado', color: `${baseClasses} bg-red-500/20 text-red-300`, status: 'unpaid', amount: 0 };
+            case 'na':
+            default:
+                switch (result.naReason) {
+                    case 'after_deactivation':
+                        return { text: '-', color: 'text-gray-600 hover:bg-gray-700 cursor-pointer opacity-50', status: 'na', amount: 0 };
+                    case 'no_enrollment_date':
+                        return { text: 'N/A', color: 'text-gray-600', status: 'na', amount: 0 };
+                    case 'before_enrollment':
+                        return { text: 'N/A', color: 'text-gray-600 font-bold opacity-30 cursor-not-allowed', status: 'na', amount: 0 };
+                    default:
+                        return { text: '-', color: `${baseClasses} text-gray-500 hover:bg-gray-700`, status: 'na', amount: 0 };
+                }
         }
-
-        // 2. If NO payment, then apply enrollment/deactivation logic
-        if (student.deactivationDate) {
-            const { year: deactivationYear, month: deactivationMonth } = parseDateLocal(student.deactivationDate);
-            if (selectedYear > deactivationYear || (selectedYear === deactivationYear && monthIndex > deactivationMonth)) {
-                return { text: '-', color: 'text-gray-600 hover:bg-gray-700 cursor-pointer opacity-50', status: 'na', amount: 0 };
-            }
-        }
-        if (!student.enrollmentDate) return { text: 'N/A', color: 'text-gray-600', status: 'na', amount: 0 };
-
-        const { year: enrollmentYear, month: enrollmentMonth } = parseDateLocal(student.enrollmentDate);
-
-        if (selectedYear < enrollmentYear || (selectedYear === enrollmentYear && monthIndex < enrollmentMonth)) {
-            return { text: 'N/A', color: 'text-gray-600 font-bold opacity-30 cursor-not-allowed', status: 'na', amount: 0 };
-        }
-
-        const expectedFee = getExpectedFee(student, monthIndex);
-
-        if (expectedFee === 0) {
-            return { text: 'Exento', color: `${baseClasses} bg-gray-600 text-gray-300`, status: 'exempt', amount: 0 };
-        }
-
-        // 3. Status for unpaid months
-        if (selectedYear < realCurrentYear || (selectedYear === realCurrentYear && monthIndex < currentMonthIndex)) {
-            return { text: 'Impagado', color: `${baseClasses} bg-red-500/20 text-red-300`, status: 'unpaid', amount: 0 };
-        }
-        return { text: '-', color: `${baseClasses} text-gray-500 hover:bg-gray-700`, status: 'na', amount: 0 };
     };
 
     const handleOpenCostModal = (cost?: Cost) => {
