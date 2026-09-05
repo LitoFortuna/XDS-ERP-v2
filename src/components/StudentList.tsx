@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Student, DanceClass, PaymentMethod, MerchandiseSale, StudentPrivateData } from '../../types';
 import Modal from './Modal';
 import { getStudentPrivateData, setStudentPrivateData, fetchAllStudentPrivateData } from '../services/domain/studentService';
+import DuplicateStudentFinder from './DuplicateStudentFinder';
 
 interface StudentListProps {
   students: Student[];
@@ -229,6 +230,7 @@ export const StudentForm: React.FC<{
 const StudentList: React.FC<StudentListProps> = ({ students, classes, merchandiseSales, addStudent, updateStudent, deleteStudent }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | undefined>(undefined);
+  const [isDuplicateFinderOpen, setIsDuplicateFinderOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
   const [classFilter, setClassFilter] = useState<string>('');
@@ -409,6 +411,10 @@ const StudentList: React.FC<StudentListProps> = ({ students, classes, merchandis
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold">Alumnos</h2>
         <div className="flex items-center gap-4">
+          <button onClick={() => setIsDuplicateFinderOpen(true)} className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-500 flex items-center transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            Buscar Duplicados
+          </button>
           <button onClick={handleExportCSV} className="bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-500 flex items-center transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
             Exportar a CSV
@@ -528,6 +534,12 @@ const StudentList: React.FC<StudentListProps> = ({ students, classes, merchandis
           </div>
         )}
       </Modal>
+      <DuplicateStudentFinder
+        isOpen={isDuplicateFinderOpen}
+        onClose={() => setIsDuplicateFinderOpen(false)}
+        students={students}
+        onEditStudent={(s) => { setIsDuplicateFinderOpen(false); handleOpenModal(s); }}
+      />
     </div>
   );
 };
