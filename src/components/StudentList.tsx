@@ -45,6 +45,7 @@ export const StudentForm: React.FC<{
     deactivationDate: student?.deactivationDate || '',
     enrolledClassIds: student?.enrolledClassIds || [],
     monthlyFee: student?.monthlyFee ?? 19,
+    augustMaintenanceFee: student?.augustMaintenanceFee,
     paymentMethod: student?.paymentMethod || 'Efectivo' as PaymentMethod,
     active: student?.active !== undefined ? student.active : true,
     notes: student?.notes || '',
@@ -108,6 +109,8 @@ export const StudentForm: React.FC<{
       setFormData(prev => ({ ...prev, [name]: selectedIds }));
     } else if (name === 'monthlyFee') {
       setFormData(prev => ({ ...prev, [name]: parseFloat(value) || 0 }));
+    } else if (name === 'augustMaintenanceFee') {
+      setFormData(prev => ({ ...prev, augustMaintenanceFee: value === '' ? undefined : (parseFloat(value) || 0) }));
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -163,6 +166,11 @@ export const StudentForm: React.FC<{
         <div>
           <label className="block text-sm font-medium text-gray-300">Cuota Mensual (€)</label>
           <input type="number" name="monthlyFee" value={formData.monthlyFee} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-purple-500 focus:border-purple-500" required min="0" step="1" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300">Cuota de Mantenimiento en Agosto (opcional)</label>
+          <input type="number" name="augustMaintenanceFee" value={formData.augustMaintenanceFee ?? ''} onChange={handleChange} placeholder="Igual que la cuota mensual" className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-purple-500 focus:border-purple-500" min="0" step="1" />
+          <p className="text-xs text-gray-400 mt-1">Si este alumno paga menos en agosto, ponlo aquí — se aplicará automáticamente cada año.</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-300">Forma de Pago</label>

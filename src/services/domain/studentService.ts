@@ -1,5 +1,5 @@
 
-import { collection, addDoc, updateDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, writeBatch, Unsubscribe } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, writeBatch, Unsubscribe, deleteField } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Student, StudentPrivateData } from '../../../types';
 import { softDeleteDoc, restoreDoc, permanentlyDeleteDoc, filterActive } from './trashService';
@@ -68,8 +68,13 @@ export const findStudentByPhone = async (phone: string): Promise<Student | null>
     return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Student;
 };
 
+// Firestore rechaza escribir `undefined` explícitamente (a diferencia de simplemente omitir la
+// clave) -- campos numéricos opcionales como augustMaintenanceFee llegan como `undefined` desde
+// StudentForm cuando el admin los deja vacíos, así que hay que quitarlos antes de escribir.
 export const addStudent = async (student: Omit<Student, 'id'>): Promise<string> => {
-    const docRef = await addDoc(collection(db, 'students'), student);
+    const { augustMaintenanceFee, ...rest } = student;
+    const payload = augustMaintenanceFee !== undefined ? { ...rest, augustMaintenanceFee } : rest;
+    const docRef = await addDoc(collection(db, 'students'), payload);
     return docRef.id;
 };
 
@@ -86,7 +91,11 @@ export const batchAddStudents = async (students: Omit<Student, 'id'>[]): Promise
 };
 
 export const updateStudent = async (student: Student) => {
-    const { id, ...data } = student;
+    const { id, augustMaintenanceFee, ...rest } = student;
+    // undefined significa "el admin lo ha dejado vacío" -- hay que borrar el campo de verdad
+    // (deleteField), no solo omitirlo, o un valor anterior se quedaría fantasma en Firestore.
+    const data: Record<string, unknown> = { ...rest };
+    data.augustMaintenanceFee = augustMaintenanceFee !== undefined ? augustMaintenanceFee : deleteField();
     await updateDoc(doc(db, 'students', id), data);
 };
 

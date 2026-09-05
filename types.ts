@@ -17,6 +17,11 @@ export interface Student {
   active: boolean;
   notes?: string;
   feeExceptions?: { [key: string]: number }; // Key: "YYYY-M", Value: specific amount for that month
+  // Cuota de mantenimiento de agosto, si este alumno tiene una negociada (algunos alumnos pagan
+  // menos en agosto). Se aplica automáticamente cada agosto sin tener que crear un feeException
+  // manual cada año; un feeException específico para ese "YYYY-7" concreto sigue teniendo prioridad
+  // si alguna vez hace falta una excepción puntual distinta de la cuota de agosto habitual.
+  augustMaintenanceFee?: number;
   deletedAt?: string; // ISO timestamp. Presente = en la Papelera, no se borra de verdad hasta pasar 30 días.
 }
 

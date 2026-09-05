@@ -33,10 +33,15 @@ const MonthlyDetailModal: React.FC<MonthlyDetailModalProps> = ({
     const monthName = months[monthIndex];
     const exceptionKey = `${year}-${monthIndex}`;
 
+    // La cuota "por defecto" de un mes es la mensual normal, salvo agosto (índice 7) si el
+    // alumno tiene una cuota de mantenimiento negociada — ver types.ts (Student.augustMaintenanceFee).
+    const getDefaultFeeForMonth = (s: Student, mIndex: number): number =>
+        mIndex === 7 && s.augustMaintenanceFee !== undefined ? s.augustMaintenanceFee : s.monthlyFee;
+
     // Calculate initial fee including exceptions
     const currentMonthFee = student.feeExceptions?.[exceptionKey] !== undefined
         ? student.feeExceptions[exceptionKey]
-        : student.monthlyFee;
+        : getDefaultFeeForMonth(student, monthIndex);
 
     const [monthSpecificFee, setMonthSpecificFee] = useState(currentMonthFee);
     const [isFeeDirty, setIsFeeDirty] = useState(false);
@@ -58,7 +63,7 @@ const MonthlyDetailModal: React.FC<MonthlyDetailModalProps> = ({
         if (isOpen) {
             const feeForThisMonth = student.feeExceptions?.[`${year}-${monthIndex}`] !== undefined
                 ? student.feeExceptions[`${year}-${monthIndex}`]
-                : student.monthlyFee;
+                : getDefaultFeeForMonth(student, monthIndex);
 
             setMonthSpecificFee(feeForThisMonth);
 
@@ -77,7 +82,7 @@ const MonthlyDetailModal: React.FC<MonthlyDetailModalProps> = ({
 
     const handleSaveSpecificFee = () => {
         const updatedExceptions = { ...student.feeExceptions };
-        if (monthSpecificFee === student.monthlyFee) {
+        if (monthSpecificFee === getDefaultFeeForMonth(student, monthIndex)) {
             delete updatedExceptions[exceptionKey];
         } else {
             updatedExceptions[exceptionKey] = monthSpecificFee;
@@ -147,7 +152,9 @@ const MonthlyDetailModal: React.FC<MonthlyDetailModalProps> = ({
                             <label className="block text-xs text-gray-400 mb-1">
                                 {student.feeExceptions?.[exceptionKey] !== undefined
                                     ? "Importe modificado para este mes"
-                                    : "Usando cuota estándar"}
+                                    : monthIndex === 7 && student.augustMaintenanceFee !== undefined
+                                        ? "Usando cuota de mantenimiento de agosto"
+                                        : "Usando cuota estándar"}
                             </label>
                             <input
                                 type="number"

@@ -234,7 +234,9 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                     const paid = paymentsForMonth.reduce((sum, p) => sum + p.amount, 0);
 
                     const exceptionKey = `${selectedYear}-${m}`;
-                    const expected = student.feeExceptions?.[exceptionKey] ?? student.monthlyFee;
+                    const expected = student.feeExceptions?.[exceptionKey] !== undefined
+                        ? student.feeExceptions[exceptionKey]
+                        : (m === 7 && student.augustMaintenanceFee !== undefined ? student.augustMaintenanceFee : student.monthlyFee);
 
                     if (paid < expected) {
                         unpaidMonths.push(monthShortNames[m]);

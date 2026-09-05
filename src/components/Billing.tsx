@@ -157,6 +157,17 @@ const Billing: React.FC<BillingProps> = React.memo(() => {
 
     type MonthStatus = 'paid' | 'partial' | 'unpaid' | 'exempt' | 'na';
 
+    // Orden de prioridad: un feeException puntual para ese mes concreto > la cuota de
+    // mantenimiento de agosto del alumno (si tiene, y el mes es agosto) > la cuota mensual normal.
+    // Así, una vez un alumno tiene su augustMaintenanceFee guardado, cada agosto siguiente muestra
+    // el importe reducido correcto sin que haga falta crear un feeException a mano cada año.
+    const getExpectedFee = (student: Student, monthIndex: number): number => {
+        const exceptionKey = `${selectedYear}-${monthIndex}`;
+        if (student.feeExceptions?.[exceptionKey] !== undefined) return student.feeExceptions[exceptionKey];
+        if (monthIndex === 7 && student.augustMaintenanceFee !== undefined) return student.augustMaintenanceFee;
+        return student.monthlyFee;
+    };
+
     const getPaymentStatusForMonth = (student: Student, monthIndex: number): { text: string; color: string; status: MonthStatus; amount: number } => {
         // 1. Check for payments FIRST. If paid, always show it.
         const paymentsForMonth = yearPayments.filter(p => {
@@ -168,10 +179,7 @@ const Billing: React.FC<BillingProps> = React.memo(() => {
         const baseClasses = "cursor-pointer transition-colors hover:brightness-110";
 
         if (totalPaid > 0) {
-            const exceptionKey = `${selectedYear}-${monthIndex}`;
-            const expectedFee = student.feeExceptions?.[exceptionKey] !== undefined
-                ? student.feeExceptions[exceptionKey]
-                : student.monthlyFee;
+            const expectedFee = getExpectedFee(student, monthIndex);
 
             if (expectedFee > 0 && totalPaid >= expectedFee) {
                 return { text: formatCurrency(totalPaid), color: `${baseClasses} bg-green-500/20 text-green-300`, status: 'paid', amount: totalPaid };
@@ -194,10 +202,7 @@ const Billing: React.FC<BillingProps> = React.memo(() => {
             return { text: 'N/A', color: 'text-gray-600 font-bold opacity-30 cursor-not-allowed', status: 'na', amount: 0 };
         }
 
-        const exceptionKey = `${selectedYear}-${monthIndex}`;
-        const expectedFee = student.feeExceptions?.[exceptionKey] !== undefined
-            ? student.feeExceptions[exceptionKey]
-            : student.monthlyFee;
+        const expectedFee = getExpectedFee(student, monthIndex);
 
         if (expectedFee === 0) {
             return { text: 'Exento', color: `${baseClasses} bg-gray-600 text-gray-300`, status: 'exempt', amount: 0 };
