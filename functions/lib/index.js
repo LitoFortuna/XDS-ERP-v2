@@ -298,11 +298,14 @@ exports.scheduledFirestoreBackup = (0, scheduler_1.onSchedule)({
 });
 // --- Recordatorio automático de cuota impagada ---
 // Corre cada lunes; recalcula el estado de pago del mes actual con la MISMA lógica de prioridad
-// que Billing.tsx/getPaymentStatusForMonth (feeException puntual > augustMaintenanceFee en agosto
-// > monthlyFee), y envía un email a quien tenga pendiente algo de esa cuota. Solo a alumnos que NO
-// pagan por domiciliación -- ese cobro es automático, "recordar" no tiene sentido y solo confunde
-// si el cargo bancario todavía no se ha procesado. Un cooldown de varios días evita reenviar el
-// mismo aviso cada semana sin parar mientras siga sin pagarse.
+// que src/utils/paymentStatus.ts::getExpectedFee (feeException puntual > augustMaintenanceFee en
+// agosto > monthlyFee), y envía un email a quien tenga pendiente algo de esa cuota. NO se puede
+// importar esa función aquí (functions/ es un proyecto TypeScript aparte, con su propio build y
+// despliegue) -- si esa prioridad cambia alguna vez, hay que replicar el cambio a mano en las
+// líneas de abajo también. Solo a alumnos que NO pagan por domiciliación -- ese cobro es
+// automático, "recordar" no tiene sentido y solo confunde si el cargo bancario todavía no se ha
+// procesado. Un cooldown de varios días evita reenviar el mismo aviso cada semana sin parar
+// mientras siga sin pagarse.
 const REMINDER_COOLDOWN_DAYS = 6;
 const REMINDER_MIN_DAY_OF_MONTH = 5; // margen para que dé tiempo a registrar pagos de principio de mes
 const MONTH_NAMES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -336,7 +339,9 @@ exports.paymentReminders = (0, scheduler_1.onSchedule)({
         const p = doc.data();
         paidByStudent.set(p.studentId, (paidByStudent.get(p.studentId) || 0) + p.amount);
     });
-    let sent = 0;
+    // Primera pasada: solo filtra en memoria (nada de Firestore), para saber a quién hace falta
+    // siquiera consultar si ya se le avisó este mes.
+    const candidates = [];
     for (const doc of studentsSnap.docs) {
         const student = doc.data();
         if (student.deletedAt)
@@ -362,8 +367,21 @@ exports.paymentReminders = (0, scheduler_1.onSchedule)({
         const paid = paidByStudent.get(doc.id) || 0;
         if (paid >= expectedFee)
             continue; // al día
-        const reminderRef = admin.firestore().collection('paymentReminders').doc(`${doc.id}_${year}-${monthIndex}`);
-        const reminderDoc = await reminderRef.get();
+        candidates.push({ docId: doc.id, student, pending: expectedFee - paid });
+    }
+    if (candidates.length === 0) {
+        console.log('[paymentReminders] Nadie pendiente este mes.');
+        return;
+    }
+    // Un solo getAll() por lote para saber a quién ya se le avisó recientemente, en vez de un
+    // reminderRef.get() secuencial por alumno (N idas y vueltas a Firestore -> 1).
+    const reminderRefs = candidates.map(c => admin.firestore().collection('paymentReminders').doc(`${c.docId}_${year}-${monthIndex}`));
+    const reminderDocs = await admin.firestore().getAll(...reminderRefs);
+    let sent = 0;
+    for (let i = 0; i < candidates.length; i++) {
+        const { docId, student, pending } = candidates[i];
+        const reminderDoc = reminderDocs[i];
+        const reminderRef = reminderRefs[i];
         if (reminderDoc.exists) {
             const lastSent = (_d = (_c = (_b = reminderDoc.data()) === null || _b === void 0 ? void 0 : _b.lastSentAt) === null || _c === void 0 ? void 0 : _c.toDate) === null || _d === void 0 ? void 0 : _d.call(_c);
             if (lastSent && (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60 * 24) < REMINDER_COOLDOWN_DAYS) {
@@ -371,9 +389,9 @@ exports.paymentReminders = (0, scheduler_1.onSchedule)({
             }
         }
         try {
-            await sendPaymentReminderEmail(student.email, student.name, expectedFee - paid, monthIndex);
+            await sendPaymentReminderEmail(student.email, student.name, pending, monthIndex);
             await reminderRef.set({
-                studentId: doc.id,
+                studentId: docId,
                 lastSentAt: admin.firestore.FieldValue.serverTimestamp(),
                 count: admin.firestore.FieldValue.increment(1),
             }, { merge: true });

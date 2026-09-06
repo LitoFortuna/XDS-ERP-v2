@@ -23,18 +23,33 @@ export const parseDateLocal = (dateStr: string) => {
     return { year, month: month - 1, day }; // month 0-indexado, igual que Date.getMonth()
 };
 
+export type FeeSource = 'exception' | 'august_maintenance' | 'standard';
+
 /**
- * Cuota esperada de un alumno en un mes concreto. Orden de prioridad: un feeException puntual
- * para ese "año-mes" > la cuota de mantenimiento de agosto del alumno (si tiene, y el mes es
- * agosto, índice 7) > la cuota mensual normal. Así, una vez un alumno tiene su
- * augustMaintenanceFee guardado, cada agosto siguiente usa el importe reducido correcto sin que
- * haga falta crear un feeException a mano cada año.
+ * Cuota esperada de un alumno en un mes concreto, junto con qué regla la determinó. Orden de
+ * prioridad: un feeException puntual para ese "año-mes" > la cuota de mantenimiento de agosto del
+ * alumno (si tiene, y el mes es agosto, índice 7) > la cuota mensual normal. Así, una vez un
+ * alumno tiene su augustMaintenanceFee guardado, cada agosto siguiente usa el importe reducido
+ * correcto sin que haga falta crear un feeException a mano cada año.
+ *
+ * `getExpectedFee` (abajo) es solo esto sin el "source" -- úsalo cuando no haga falta explicar de
+ * dónde sale el importe (p.ej. para calcular si está pagado); usa `getFeeWithSource` cuando sí
+ * (p.ej. para mostrarle al admin "esto es la cuota de agosto" en vez de re-derivar la misma
+ * cadena de prioridad a mano en el componente).
  */
-export function getExpectedFee(student: Student, year: number, monthIndex: number): number {
+export function getFeeWithSource(student: Student, year: number, monthIndex: number): { fee: number; source: FeeSource } {
     const exceptionKey = `${year}-${monthIndex}`;
-    if (student.feeExceptions?.[exceptionKey] !== undefined) return student.feeExceptions[exceptionKey];
-    if (monthIndex === 7 && student.augustMaintenanceFee !== undefined) return student.augustMaintenanceFee;
-    return student.monthlyFee;
+    if (student.feeExceptions?.[exceptionKey] !== undefined) {
+        return { fee: student.feeExceptions[exceptionKey], source: 'exception' };
+    }
+    if (monthIndex === 7 && student.augustMaintenanceFee !== undefined) {
+        return { fee: student.augustMaintenanceFee, source: 'august_maintenance' };
+    }
+    return { fee: student.monthlyFee, source: 'standard' };
+}
+
+export function getExpectedFee(student: Student, year: number, monthIndex: number): number {
+    return getFeeWithSource(student, year, monthIndex).fee;
 }
 
 /**

@@ -1,15 +1,8 @@
 
-import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, getDocs, Unsubscribe } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { DanceEvent } from '../../../types';
 import { softDeleteDoc, restoreDoc, permanentlyDeleteDoc, filterActive } from './trashService';
-
-export const subscribeToEvents = (callback: (events: DanceEvent[]) => void): Unsubscribe => {
-    const q = query(collection(db, 'events'), orderBy('date', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-        callback(filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DanceEvent))));
-    });
-};
 
 export const fetchEvents = async (): Promise<DanceEvent[]> => {
     const q = query(collection(db, 'events'), orderBy('date', 'desc'));

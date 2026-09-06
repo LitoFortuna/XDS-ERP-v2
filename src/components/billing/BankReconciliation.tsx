@@ -4,6 +4,7 @@ import { Student, Payment } from '../../../types';
 import Modal from '../Modal';
 import { fetchAllStudentPrivateData } from '../../services/domain/studentService';
 import { normalizeIban, parseSpanishAmount, guessColumn, findHeaderRowIndex } from '../../utils/bankFileParsing';
+import { formatCurrency } from '../../utils/formatters';
 
 interface BankReconciliationProps {
     isOpen: boolean;
@@ -36,12 +37,6 @@ interface UnmatchedRow {
 }
 
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-
-const formatCurrency = (v: number) => {
-    const parts = v.toFixed(2).split('.');
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return parts.join(',') + '€';
-};
 
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose, students, payments, onConfirm }) => {
     const today = new Date();

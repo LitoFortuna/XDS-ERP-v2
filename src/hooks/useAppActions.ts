@@ -6,6 +6,7 @@ import { View, Student, Instructor, DanceClass, Payment, Cost, NuptialDance, Dan
 import {
     addStudent as addStudentToDb,
     updateStudent as updateStudentInDb,
+    batchRemoveClassFromStudents,
     deleteStudent as deleteStudentFromDb,
     restoreStudent as restoreStudentInDb,
     permanentlyDeleteStudent as permanentlyDeleteStudentFromDb,
@@ -138,15 +139,8 @@ export const useAppActions = () => {
     };
 
     const deleteClass = async (classId: string) => {
-        const studentsToUpdate = students.filter(s => s.enrolledClassIds?.includes(classId));
-        const updatePromises = studentsToUpdate.map(student => {
-            const updatedStudent = {
-                ...student,
-                enrolledClassIds: student.enrolledClassIds.filter(id => id !== classId)
-            };
-            return updateStudentInDb(updatedStudent);
-        });
-        await Promise.all(updatePromises);
+        const studentIdsToUpdate = students.filter(s => s.enrolledClassIds?.includes(classId)).map(s => s.id);
+        await batchRemoveClassFromStudents(studentIdsToUpdate, classId);
         await deleteClassFromDb(classId);
         queryClient.invalidateQueries({ queryKey: ['classes'] });
         queryClient.invalidateQueries({ queryKey: ['students'] });
@@ -345,23 +339,10 @@ export const useAppActions = () => {
         }
         queryClient.invalidateQueries({ queryKey: ['attendance'] });
 
-        // Update progress for all students involved (present or previously present)
-        try {
-            const affectedStudentIds = record.presentStudentIds;
-
-            if (affectedStudentIds.length > 0) {
-                const progressPromises = affectedStudentIds.map(async (studentId) => {
-                    // We don't need a query here if updateProgressAfterAttendance does it, 
-                    // but let's assume we want to force refresh student data too
-                    queryClient.invalidateQueries({ queryKey: ['progress', studentId] });
-                });
-
-                await Promise.all(progressPromises);
-            }
-
-        } catch (error) {
-            console.error('[useAppActions] Error updating progress invalidation:', error);
-        }
+        // Refresca el progreso (gamificación) de cada alumna afectada por este pase de lista.
+        await Promise.all(
+            record.presentStudentIds.map(studentId => queryClient.invalidateQueries({ queryKey: ['progress', studentId] }))
+        );
 
         // Log activity for SuperAdmin notification if Admin made the action
         if (userProfile && userProfile.role === 'Admin') {

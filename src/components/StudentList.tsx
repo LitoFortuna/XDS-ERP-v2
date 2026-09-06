@@ -4,6 +4,7 @@ import { Student, DanceClass, PaymentMethod, MerchandiseSale, StudentPrivateData
 import Modal from './Modal';
 import { getStudentPrivateData, setStudentPrivateData, fetchAllStudentPrivateData } from '../services/domain/studentService';
 import DuplicateStudentFinder from './DuplicateStudentFinder';
+import { downloadCSV } from '../utils/csvExportUtils';
 
 interface StudentListProps {
   students: Student[];
@@ -349,16 +350,6 @@ const StudentList: React.FC<StudentListProps> = ({ students, classes, merchandis
     return cellString;
   };
 
-  const downloadCSV = (csvContent: string, filename: string) => {
-    const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const handleExportCSV = async () => {
     const privateDataMap = await fetchAllStudentPrivateData(sortedAndFilteredStudents.map(s => s.id));
 
@@ -390,7 +381,7 @@ const StudentList: React.FC<StudentListProps> = ({ students, classes, merchandis
       ...dataToExport.map(row => row.map(sanitizeCSVCell).join(';'))
     ].join('\n');
 
-    downloadCSV(csvContent, 'alumnos.csv');
+    downloadCSV('alumnos.csv', csvContent);
   };
 
   const SortableHeader: React.FC<{ sortKey: SortKey; children: React.ReactNode; }> = ({ sortKey, children }) => (

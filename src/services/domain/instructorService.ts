@@ -1,16 +1,8 @@
 
-import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, writeBatch, Unsubscribe } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Instructor } from '../../../types';
 import { softDeleteDoc, restoreDoc, permanentlyDeleteDoc, filterActive } from './trashService';
-
-export const subscribeToInstructors = (callback: (instructors: Instructor[]) => void): Unsubscribe => {
-    const q = query(collection(db, 'instructors'), orderBy('name'));
-    return onSnapshot(q, (snapshot) => {
-        callback(filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Instructor))));
-    });
-};
-
 import { getDocs } from 'firebase/firestore';
 
 export const fetchInstructors = async (): Promise<Instructor[]> => {

@@ -1,5 +1,5 @@
 
-import { collection, addDoc, updateDoc, doc, getDoc, setDoc, onSnapshot, query, orderBy, writeBatch, Unsubscribe, deleteField } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, getDoc, setDoc, query, orderBy, writeBatch, deleteField, arrayRemove } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Student, StudentPrivateData } from '../../../types';
 import { softDeleteDoc, restoreDoc, permanentlyDeleteDoc, filterActive } from './trashService';
@@ -44,13 +44,6 @@ export const batchSetStudentPrivateData = async (entries: { studentId: string; d
         }
     });
     await batch.commit();
-};
-
-export const subscribeToStudents = (callback: (students: Student[]) => void): Unsubscribe => {
-    const q = query(collection(db, 'students'), orderBy('name'));
-    return onSnapshot(q, (snapshot) => {
-        callback(filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student))));
-    });
 };
 
 import { getDocs, where } from 'firebase/firestore';
@@ -103,6 +96,20 @@ export const updateStudent = async (student: Student) => {
     const data: Record<string, unknown> = { ...rest };
     data.augustMaintenanceFee = augustMaintenanceFee !== undefined ? augustMaintenanceFee : deleteField();
     await updateDoc(doc(db, 'students', id), data);
+};
+
+// Usado al borrar una clase: hay que desinscribir a todos sus alumnos de golpe. Antes se hacía
+// con un updateStudent completo por alumno (N escrituras de red independientes, sin atomicidad);
+// esto solo toca el campo que realmente cambia, en un único writeBatch.
+export const batchRemoveClassFromStudents = async (studentIds: string[], classId: string) => {
+    if (studentIds.length === 0) return;
+    const batch = writeBatch(db);
+    studentIds.forEach(studentId => {
+        batch.update(doc(db, 'students', studentId), {
+            enrolledClassIds: arrayRemove(classId),
+        });
+    });
+    await batch.commit();
 };
 
 export const deleteStudent = async (studentId: string) => {

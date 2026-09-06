@@ -2,7 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { Payment, Student, PaymentMethod } from '../../../types';
 import Modal from '../Modal';
-import { getExpectedFee } from '../../utils/paymentStatus';
+import { getExpectedFee, getFeeWithSource } from '../../utils/paymentStatus';
+
+const FEE_SOURCE_LABELS: Record<ReturnType<typeof getFeeWithSource>['source'], string> = {
+    exception: 'Importe modificado para este mes',
+    august_maintenance: 'Usando cuota de mantenimiento de agosto',
+    standard: 'Usando cuota estándar',
+};
+import { formatCurrency } from '../../utils/formatters';
 
 interface MonthlyDetailModalProps {
     isOpen: boolean;
@@ -17,15 +24,6 @@ interface MonthlyDetailModalProps {
     onDeletePayment: (id: string) => void;
     onNavigateMonth: (direction: 'prev' | 'next') => void;
 }
-
-/**
- * Formateador de moneda para visualización consistente.
- */
-const formatCurrency = (v: number, decimals: number = 2) => {
-    const parts = v.toFixed(decimals).split('.');
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    return parts.join(',') + '€';
-};
 
 const MonthlyDetailModal: React.FC<MonthlyDetailModalProps> = ({
     isOpen, onClose, student, monthIndex, year, payments, onUpdateStudent, onAddPayment, onUpdatePayment, onDeletePayment, onNavigateMonth
@@ -152,11 +150,7 @@ const MonthlyDetailModal: React.FC<MonthlyDetailModalProps> = ({
                     <div className="flex items-end gap-4">
                         <div className="flex-1">
                             <label className="block text-xs text-gray-400 mb-1">
-                                {student.feeExceptions?.[exceptionKey] !== undefined
-                                    ? "Importe modificado para este mes"
-                                    : monthIndex === 7 && student.augustMaintenanceFee !== undefined
-                                        ? "Usando cuota de mantenimiento de agosto"
-                                        : "Usando cuota estándar"}
+                                {FEE_SOURCE_LABELS[getFeeWithSource(student, year, monthIndex).source]}
                             </label>
                             <input
                                 type="number"

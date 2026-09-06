@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Payment, Student, DanceClass, MerchandiseSale } from '../../types';
+import { formatCurrency } from '../utils/formatters';
 
 interface QuarterlyInvoicingProps {
     payments: Payment[];
@@ -8,15 +9,6 @@ interface QuarterlyInvoicingProps {
     classes: DanceClass[];
     merchandiseSales: MerchandiseSale[];
 }
-
-/**
- * Formateador de moneda robusto que garantiza el formato 12.056€
- */
-const formatCurrency = (v: number, decimals: number = 2) => {
-    const parts = v.toFixed(decimals).split('.');
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    return parts.join(',') + '€';
-};
 
 const InfoCard: React.FC<{ title: string; total: number }> = ({ title, total }) => {
     const base = total / 1.21;

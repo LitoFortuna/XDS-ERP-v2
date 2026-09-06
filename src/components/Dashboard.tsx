@@ -12,18 +12,13 @@ import {
 import { useAppStore } from '../store/useAppStore';
 import { useAppActions } from '../hooks/useAppActions';
 import { getEventRevenue } from '../utils/eventRevenue';
+import { formatCurrency } from '../utils/formatters';
 
 interface DashboardProps {
     // Props handled via Zustand
 }
 
 const COLORS = ['#8B5CF6', '#EC4899', '#3B82F6', '#10B981', '#F59E0B', '#6366F1', '#4B5563'];
-
-const formatCurrency = (v: number, decimals: number = 0) => {
-    const parts = v.toFixed(decimals).split('.');
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    return (decimals > 0 ? parts.join(',') : parts[0]) + '€';
-};
 
 const StatCard: React.FC<{
     title: string;
@@ -797,13 +792,13 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
             {/* FILA 1: KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard title="Alumnos Activos" value={activeStudentsCount.toLocaleString('es-ES')} subtext={`Estado al final de ${selectedYear}`} icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} color="blue" />
-                <StatCard title={`Ingresos (${selectedYear})`} value={formatCurrency(totalRevenue)} subtext="Facturación anual" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} color="emerald" />
+                <StatCard title={`Ingresos (${selectedYear})`} value={formatCurrency(totalRevenue, 0)} subtext="Facturación anual" icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} color="emerald" />
                 <StatCard title="Ocupación Global" value={`${globalOccupancy}%`} subtext="Capacidad utilizada" icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>} color="purple" />
-                <StatCard title={`Beneficio (${selectedYear})`} value={formatCurrency(profit)} icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} color="emerald" />
+                <StatCard title={`Beneficio (${selectedYear})`} value={formatCurrency(profit, 0)} icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>} color="emerald" />
 
                 <StatCard title="ROI Anual" value={`${roi}%`} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>} color="indigo" />
                 <StatCard title="Tasa de Cobro" value={`${collectionRate}%`} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} color="emerald" />
-                <StatCard title="Pendiente Cobro" value={formatCurrency(totalPendingAmount)} subtext={`En el año ${selectedYear}`} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} color="rose" />
+                <StatCard title="Pendiente Cobro" value={formatCurrency(totalPendingAmount, 0)} subtext={`En el año ${selectedYear}`} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>} color="rose" />
                 <StatCard title="Profesores" value={instructors.length} icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>} color="blue" />
             </div>
 
@@ -854,8 +849,8 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                     <ComposedChart data={rentabilidadData}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                         <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 9, fontWeight: 700 }} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => formatCurrency(v)} />
-                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', fontSize: '11px' }} formatter={(v: number) => formatCurrency(v)} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => formatCurrency(v, 0)} />
+                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', fontSize: '11px' }} formatter={(v: number) => formatCurrency(v, 0)} />
                         <Legend verticalAlign="top" align="center" iconType="circle" wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase' }} />
                         <Bar dataKey="Gastos" fill="#f43f5e" radius={[4, 4, 0, 0]} barSize={12} name="Gastos Estimados" />
                         <Bar dataKey="Ingresos" fill="#10b981" radius={[4, 4, 0, 0]} barSize={12} name="Ingresos Estimados" />
@@ -901,10 +896,10 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
-                                    <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', fontSize: '11px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} itemStyle={{ color: '#fff', fontWeight: 'bold' }} />
+                                    <Tooltip formatter={(v: number) => formatCurrency(v, 0)} contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', fontSize: '11px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} itemStyle={{ color: '#fff', fontWeight: 'bold' }} />
                                     <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle">
                                         <tspan x="50%" dy="-6" fontSize="28" fontWeight="900" fill="#fff" style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))' }}>
-                                            {formatCurrency(expensesByCategory.reduce((s, i) => s + i.value, 0))}
+                                            {formatCurrency(expensesByCategory.reduce((s, i) => s + i.value, 0), 0)}
                                         </tspan>
                                         <tspan x="50%" dy="24" fontSize="10" fill="#94a3b8" fontWeight="bold" letterSpacing="0.1em" textAnchor="middle">TOTAL</tspan>
                                     </text>
@@ -931,7 +926,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="text-[10px] font-bold text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded text-right w-10">{percent.toFixed(0)}%</span>
-                                            <span className="text-xs font-black text-white">{formatCurrency(item.value)}</span>
+                                            <span className="text-xs font-black text-white">{formatCurrency(item.value, 0)}</span>
                                         </div>
                                     </div>
                                     <div className="w-full bg-gray-700/50 rounded-full h-1.5 overflow-hidden">
@@ -1122,8 +1117,8 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                         <AreaChart data={finanzasHistory}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => formatCurrency(v)} />
-                            <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px' }} formatter={(v: number) => formatCurrency(v)} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => formatCurrency(v, 0)} />
+                            <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px' }} formatter={(v: number) => formatCurrency(v, 0)} />
                             <Legend verticalAlign="bottom" iconType="diamond" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                             <Area type="monotone" dataKey="Ingresos" stroke="#8b5cf6" strokeWidth={3} fill="#8b5cf6" fillOpacity={0.2} />
                             <Area type="monotone" dataKey="Gastos" stroke="#f43f5e" strokeWidth={3} fill="#f43f5e" fillOpacity={0.15} />
@@ -1144,7 +1139,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                         <LineChart data={finanzasHistory.map(f => ({ ...f, ratio: (f.Ingresos / (activeStudentsCount || 1)).toFixed(1) }))}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                            <YAxis domain={[10, 40]} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => formatCurrency(v)} />
+                            <YAxis domain={[10, 40]} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={v => formatCurrency(v, 0)} />
                             <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px' }} formatter={(v: any) => formatCurrency(parseFloat(v), 2)} />
                             <Line type="monotone" dataKey="ratio" stroke="#a78bfa" strokeWidth={4} dot={{ r: 4, fill: '#fff', stroke: '#a78bfa', strokeWidth: 2 }} />
                         </LineChart>
@@ -1184,10 +1179,10 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                                                     <Cell key={`cell-${index}`} fill={entry.color} />
                                                 ))}
                                             </Pie>
-                                            <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', fontSize: '11px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} itemStyle={{ color: '#fff', fontWeight: 'bold' }} />
+                                            <Tooltip formatter={(v: number) => formatCurrency(v, 0)} contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', fontSize: '11px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} itemStyle={{ color: '#fff', fontWeight: 'bold' }} />
                                             <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle">
                                                 <tspan x="50%" dy="-6" fontSize="18" fontWeight="900" fill="#fff" style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.5))' }}>
-                                                    {formatCurrency(totalPayments)}
+                                                    {formatCurrency(totalPayments, 0)}
                                                 </tspan>
                                                 <tspan x="50%" dy="20" fontSize="9" fill="#94a3b8" fontWeight="bold" letterSpacing="0.1em" textAnchor="middle">TOTAL</tspan>
                                             </text>
@@ -1206,7 +1201,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[9px] font-bold text-gray-500 bg-gray-800 px-1 py-0.5 rounded text-right w-8">{percent.toFixed(0)}%</span>
-                                                        <span className="text-[10px] font-black text-white">{formatCurrency(item.value)}</span>
+                                                        <span className="text-[10px] font-black text-white">{formatCurrency(item.value, 0)}</span>
                                                     </div>
                                                 </div>
                                                 <div className="w-full bg-gray-700/50 rounded-full h-1 overflow-hidden">
@@ -1291,10 +1286,10 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                                 <Cell fill="#10b981" />
                                 <Cell fill="#f43f5e" />
                             </Pie>
-                            <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', fontSize: '11px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} itemStyle={{ color: '#fff', fontWeight: 'bold' }} />
+                            <Tooltip formatter={(v: number) => formatCurrency(v, 0)} contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', fontSize: '11px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} itemStyle={{ color: '#fff', fontWeight: 'bold' }} />
                             <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle">
                                 <tspan x="50%" dy="-6" fontSize="14" fontWeight="900" fill={totalRevenue - totalCosts >= 0 ? "#10b981" : "#f43f5e"}>
-                                    {formatCurrency(totalRevenue - totalCosts)}
+                                    {formatCurrency(totalRevenue - totalCosts, 0)}
                                 </tspan>
                                 <tspan x="50%" dy="18" fontSize="8" fill="#94a3b8" fontWeight="bold" letterSpacing="0.1em" textAnchor="middle">BENEFICIO</tspan>
                             </text>
@@ -1303,11 +1298,11 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                     <div className="w-full flex flex-col gap-2 mt-2">
                         <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 bg-gray-800/50 p-2 rounded-lg">
                             <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div>INGRESOS</div>
-                            <span className="text-emerald-400">{formatCurrency(totalRevenue)}</span>
+                            <span className="text-emerald-400">{formatCurrency(totalRevenue, 0)}</span>
                         </div>
                         <div className="flex justify-between items-center text-[10px] font-bold text-gray-400 bg-gray-800/50 p-2 rounded-lg">
                             <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-rose-500"></div>COSTES</div>
-                            <span className="text-rose-400">{formatCurrency(totalCosts)}</span>
+                            <span className="text-rose-400">{formatCurrency(totalCosts, 0)}</span>
                         </div>
                     </div>
                 </div>
@@ -1521,10 +1516,10 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                 <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={profitabilityBreakdownData} layout="vertical" margin={{ left: 20, right: 20, top: 10, bottom: 10 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                        <XAxis type="number" stroke="#94a3b8" style={{ fontSize: '10px', fontWeight: 'bold' }} tickFormatter={(v) => formatCurrency(v)} />
+                        <XAxis type="number" stroke="#94a3b8" style={{ fontSize: '10px', fontWeight: 'bold' }} tickFormatter={(v) => formatCurrency(v, 0)} />
                         <YAxis dataKey="name" type="category" stroke="#94a3b8" width={100} style={{ fontSize: '10px', fontWeight: 'bold' }} />
                         <Tooltip
-                            formatter={(v: number) => formatCurrency(v)}
+                            formatter={(v: number) => formatCurrency(v, 0)}
                             contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', fontSize: '11px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}
                             itemStyle={{ color: '#fff', fontWeight: 'bold' }}
                         />

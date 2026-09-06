@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Student, Instructor, DanceClass, Payment, Cost, PaymentMethod, ClassCategory, DayOfWeek, CostCategory, CostPaymentMethod, MerchandiseItem, DanceEvent, StudentPrivateData } from '../../types';
-import { generateFullBackupZip } from '../utils/csvExportUtils';
+import { generateFullBackupZip, downloadCSV } from '../utils/csvExportUtils';
 import { getEventRevenue } from '../utils/eventRevenue';
 import { batchSetStudentPrivateData, fetchAllStudentPrivateData } from '../services/domain/studentService';
+import { parseDateLocal } from '../utils/paymentStatus';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -42,16 +43,8 @@ const ImporterSection: React.FC<{
     const handleDownloadTemplate = () => {
         const headersForFile = templateHeaders.map(h => h.split('(')[0].trim());
         const csvContent = headersForFile.join(';') + '\n';
-        const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        if (link.href) {
-            URL.revokeObjectURL(link.href);
-        }
-        link.href = URL.createObjectURL(blob);
-        link.download = `${title.toLowerCase().replace(/ /g, '_').replace(/[\(\)]/g, '')}_plantilla.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const filename = `${title.toLowerCase().replace(/ /g, '_').replace(/[\(\)]/g, '')}_plantilla.csv`;
+        downloadCSV(filename, csvContent);
     };
 
     const handleImport = async () => {
@@ -457,17 +450,6 @@ const DataManagement: React.FC<DataManagementProps> = ({
         };
 
         // Calculate metrics for selected month
-        // Helper to parse dates timezone-safely (local date)
-        const parseDateLocal = (dateStr: string) => {
-            if (!dateStr) return { year: 0, month: -1 };
-            const cleanStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
-            const parts = cleanStr.split('-');
-            return {
-                year: parts.length >= 1 ? parseInt(parts[0], 10) : 0,
-                month: parts.length >= 2 ? parseInt(parts[1], 10) - 1 : -1
-            };
-        };
-
         const monthPayments = payments.filter(p => {
             const parsed = parseDateLocal(p.date);
             return parsed.month === selectedReportMonth && parsed.year === selectedReportYear;

@@ -1,19 +1,10 @@
 
-import { collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, writeBatch, Unsubscribe, getDocs } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, query, orderBy, writeBatch, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { Payment, Cost } from '../../../types';
 import { softDeleteDoc, restoreDoc, permanentlyDeleteDoc, filterActive } from './trashService';
 
 // --- Payments ---
-export const subscribeToPayments = (callback: (payments: Payment[]) => void): Unsubscribe => {
-    const q = query(collection(db, 'payments'), orderBy('date', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-        callback(filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment))));
-    });
-};
-
-
-
 export const fetchPayments = async (): Promise<Payment[]> => {
     const q = query(collection(db, 'payments'), orderBy('date', 'desc'));
     const snapshot = await getDocs(q);
@@ -55,13 +46,6 @@ export const batchAddPayments = async (payments: Omit<Payment, 'id'>[]) => {
 };
 
 // --- Costs ---
-export const subscribeToCosts = (callback: (costs: Cost[]) => void): Unsubscribe => {
-    const q = query(collection(db, 'costs'), orderBy('paymentDate', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-        callback(filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cost))));
-    });
-};
-
 export const addCost = async (cost: Omit<Cost, 'id'>) => {
     await addDoc(collection(db, 'costs'), cost);
 };

@@ -10,25 +10,8 @@ import MonthlyDetailModal from './billing/MonthlyDetailModal';
 import PaymentForm from './billing/PaymentForm';
 import CostForm from './billing/CostForm';
 import BankReconciliation from './billing/BankReconciliation';
-import { getPaymentStatusForMonth as getPaymentStatusForMonthPure, MonthStatus } from '../utils/paymentStatus';
-
-
-const formatCurrency = (v: number, decimals: number = 2) => {
-    const parts = v.toFixed(decimals).split('.');
-    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    return parts.join(',') + '€';
-};
-
-/**
- * Parsea una fecha YYYY-MM-DD ignorando la zona horaria (tratándola como local pura)
- */
-const parseDateLocal = (dateStr: string) => {
-    if (!dateStr) return { year: 0, month: -1, day: 0 };
-    // Handle "YYYY-MM-DD" or ISO with T
-    const cleanStr = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
-    const [year, month, day] = cleanStr.split('-').map(Number);
-    return { year, month: month - 1, day }; // month is 0-indexed for consistency
-};
+import { getPaymentStatusForMonth as getPaymentStatusForMonthPure, MonthStatus, parseDateLocal } from '../utils/paymentStatus';
+import { formatCurrency } from '../utils/formatters';
 
 // --- COMPONENTE PRINCIPAL DE FACTURACIÓN ---
 interface BillingProps {
