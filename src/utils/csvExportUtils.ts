@@ -18,6 +18,21 @@ const formatDateForCSV = (dateStr?: string): string => {
     return `${day}-${month}-${year}`;
 };
 
+// Los exports de abajo usaban `row.join(';')` a secas: cualquier nota/concepto con un ';' (muy
+// habitual en texto libre en español) descuadraba todas las columnas siguientes de esa fila sin
+// ningún aviso. Regla CSV estándar adaptada al separador ';' que ya usa esta app: si el campo
+// contiene el separador, comillas o un salto de línea, se envuelve en comillas y se duplican las
+// comillas internas.
+const escapeCsvField = (value: unknown): string => {
+    const str = String(value ?? '');
+    if (str.includes(';') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+};
+
+const toCsvRow = (fields: unknown[]): string => fields.map(escapeCsvField).join(';');
+
 /**
  * Triggers a localized browser download for a CSV blob
  */
@@ -60,7 +75,7 @@ export const exportPaymentsToCSV = (payments: Payment[], students: Student[]): s
         ];
     });
 
-    return [headers.join(';'), ...rows.map(row => row.join(';'))].join('\n');
+    return [toCsvRow(headers), ...rows.map(toCsvRow)].join('\n');
 };
 
 /**
@@ -89,7 +104,7 @@ export const exportCostsToCSV = (costs: Cost[]): string => {
         c.notes || ''
     ]);
 
-    return [headers.join(';'), ...rows.map(row => row.join(';'))].join('\n');
+    return [toCsvRow(headers), ...rows.map(toCsvRow)].join('\n');
 };
 
 /**
@@ -137,7 +152,7 @@ export const exportStudentsToCSV = (
         ];
     });
 
-    return [headers.join(';'), ...rows.map(row => row.join(';'))].join('\n');
+    return [toCsvRow(headers), ...rows.map(toCsvRow)].join('\n');
 };
 
 /**
@@ -164,7 +179,7 @@ export const exportInstructorsToCSV = (instructors: Instructor[]): string => {
         i.notes || ''
     ]);
 
-    return [headers.join(';'), ...rows.map(row => row.join(';'))].join('\n');
+    return [toCsvRow(headers), ...rows.map(toCsvRow)].join('\n');
 };
 
 /**
@@ -196,7 +211,7 @@ export const exportClassesToCSV = (classes: DanceClass[], instructors: Instructo
         ];
     });
 
-    return [headers.join(';'), ...rows.map(row => row.join(';'))].join('\n');
+    return [toCsvRow(headers), ...rows.map(toCsvRow)].join('\n');
 };
 
 /**
@@ -225,7 +240,7 @@ export const exportMerchandiseToCSV = (items: MerchandiseItem[]): string => {
         i.notes || ''
     ]);
 
-    return [headers.join(';'), ...rows.map(row => row.join(';'))].join('\n');
+    return [toCsvRow(headers), ...rows.map(toCsvRow)].join('\n');
 };
 
 /**

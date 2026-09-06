@@ -33,8 +33,14 @@ export const fetchAllStudentPrivateData = async (studentIds: string[]): Promise<
 export const batchSetStudentPrivateData = async (entries: { studentId: string; data: StudentPrivateData }[]) => {
     const batch = writeBatch(db);
     entries.forEach(({ studentId, data }) => {
-        if (data.dni || data.iban) {
-            batch.set(privateDocRef(studentId), data, { merge: true });
+        // Firestore rechaza escribir un campo explícitamente `undefined` (p.ej. una fila de CSV
+        // sin columna de IBAN) y aborta el batch entero -- se quita cualquier campo sin valor
+        // antes de escribir, en vez de pasar { dni, iban } tal cual.
+        const cleanData: StudentPrivateData = {};
+        if (data.dni) cleanData.dni = data.dni;
+        if (data.iban) cleanData.iban = data.iban;
+        if (Object.keys(cleanData).length > 0) {
+            batch.set(privateDocRef(studentId), cleanData, { merge: true });
         }
     });
     await batch.commit();

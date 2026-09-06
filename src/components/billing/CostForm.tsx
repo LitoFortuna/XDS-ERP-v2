@@ -20,7 +20,7 @@ const CostForm: React.FC<CostFormProps> = ({ cost, instructors, initialValues, o
         paymentMethod: cost?.paymentMethod || initialValues?.paymentMethod || 'Transferencia' as CostPaymentMethod,
         isRecurring: cost?.isRecurring ?? initialValues?.isRecurring ?? false,
         notes: cost?.notes || initialValues?.notes || '',
-        relatedInstructorId: cost?.relatedInstructorId || '',
+        relatedInstructorId: cost?.relatedInstructorId || initialValues?.relatedInstructorId || '',
     });
 
     const [selectedRecurringDates, setSelectedRecurringDates] = useState<Set<string>>(new Set());

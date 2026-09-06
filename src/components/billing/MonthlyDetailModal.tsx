@@ -12,8 +12,8 @@ interface MonthlyDetailModalProps {
     year: number;
     payments: Payment[];
     onUpdateStudent: (student: Student) => void;
-    onAddPayment: (payment: Omit<Payment, 'id'>) => void;
-    onUpdatePayment: (payment: Payment) => void;
+    onAddPayment: (payment: Omit<Payment, 'id'>) => Promise<void>;
+    onUpdatePayment: (payment: Payment) => Promise<void>;
     onDeletePayment: (id: string) => void;
     onNavigateMonth: (direction: 'prev' | 'next') => void;
 }
@@ -85,17 +85,21 @@ const MonthlyDetailModal: React.FC<MonthlyDetailModalProps> = ({
         setIsFeeDirty(false);
     };
 
-    const handleAddPaymentSubmit = (e: React.FormEvent) => {
+    const handleAddPaymentSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        onAddPayment({
-            studentId: student.id,
-            amount: newPayment.amount,
-            date: newPayment.date,
-            paymentMethod: newPayment.method,
-            concept: newPayment.concept,
-            notes: ''
-        });
-        setNewPayment(prev => ({ ...prev, amount: 0 }));
+        try {
+            await onAddPayment({
+                studentId: student.id,
+                amount: newPayment.amount,
+                date: newPayment.date,
+                paymentMethod: newPayment.method,
+                concept: newPayment.concept,
+                notes: ''
+            });
+            setNewPayment(prev => ({ ...prev, amount: 0 }));
+        } catch (error: any) {
+            alert(error.message || 'No se pudo guardar el cobro. Revisa tu conexión e inténtalo de nuevo.');
+        }
     };
 
     const startEditPayment = (payment: Payment) => {
@@ -103,10 +107,14 @@ const MonthlyDetailModal: React.FC<MonthlyDetailModalProps> = ({
         setEditPaymentData(payment);
     };
 
-    const saveEditPayment = () => {
+    const saveEditPayment = async () => {
         if (editingPaymentId && editPaymentData) {
-            onUpdatePayment(editPaymentData as Payment);
-            setEditingPaymentId(null);
+            try {
+                await onUpdatePayment(editPaymentData as Payment);
+                setEditingPaymentId(null);
+            } catch (error: any) {
+                alert(error.message || 'No se pudo guardar el cambio. Revisa tu conexión e inténtalo de nuevo.');
+            }
         }
     };
 

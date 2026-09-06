@@ -163,7 +163,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ isOpen, onClose
                 const iban = normalizeIban(ibanRaw);
                 const amount = parseSpanishAmount(row[amountCol]);
 
-                if (!iban || !amount || isNaN(amount)) return; // fila vacía / de metadatos / basura
+                // OJO: no usar "!amount" -- un adeudo devuelto/anulado puede venir a 0,00€ con un
+                // IBAN válido, y esa fila también hay que mostrarla (antes desaparecía sin dejar rastro).
+                if (!iban || isNaN(amount)) return; // fila vacía / de metadatos / basura
 
                 const candidates = studentsByIban.get(iban) || [];
                 if (candidates.length === 0) {

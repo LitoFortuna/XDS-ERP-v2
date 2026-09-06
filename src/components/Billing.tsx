@@ -206,15 +206,21 @@ const Billing: React.FC<BillingProps> = React.memo(() => {
         setIsCostModalOpen(false);
     };
 
-    const handleCostSubmit = (costData: Omit<Cost, 'id'> | Cost | Omit<Cost, 'id'>[]) => {
-        if (Array.isArray(costData)) {
-            costData.forEach(c => addCost(c));
-        } else if ('id' in costData) {
-            updateCost(costData);
-        } else {
-            addCost(costData);
+    const handleCostSubmit = async (costData: Omit<Cost, 'id'> | Cost | Omit<Cost, 'id'>[]) => {
+        try {
+            if (Array.isArray(costData)) {
+                await Promise.all(costData.map(c => addCost(c)));
+            } else if ('id' in costData) {
+                await updateCost(costData);
+            } else {
+                await addCost(costData);
+            }
+            handleCloseCostModal();
+        } catch (error: any) {
+            // Si falla el guardado no se cierra el modal -- antes se cerraba igual y el fallo solo
+            // quedaba como una promesa rechazada sin manejar en la consola, sin avisar al admin.
+            alert(error.message || 'No se pudo guardar el gasto. Revisa tu conexión e inténtalo de nuevo.');
         }
-        handleCloseCostModal();
     };
 
     const handleCostDelete = (id: string) => {
@@ -491,7 +497,14 @@ const Billing: React.FC<BillingProps> = React.memo(() => {
             )}
 
             <Modal isOpen={isIncomeModalOpen} onClose={() => setIsIncomeModalOpen(false)} title="Registrar Cobro">
-                <PaymentForm students={students} onSubmit={(p) => { addPayment(p); setIsIncomeModalOpen(false); }} onCancel={() => setIsIncomeModalOpen(false)} />
+                <PaymentForm students={students} onSubmit={async (p) => {
+                    try {
+                        await addPayment(p);
+                        setIsIncomeModalOpen(false);
+                    } catch (error: any) {
+                        alert(error.message || 'No se pudo guardar el cobro. Revisa tu conexión e inténtalo de nuevo.');
+                    }
+                }} onCancel={() => setIsIncomeModalOpen(false)} />
             </Modal>
             <BankReconciliation
                 isOpen={isReconciliationModalOpen}

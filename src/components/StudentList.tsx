@@ -255,7 +255,7 @@ const StudentList: React.FC<StudentListProps> = ({ students, classes, merchandis
 
       let matchesClass = true;
       if (classFilter) {
-        matchesClass = student.enrolledClassIds.includes(classFilter);
+        matchesClass = !!student.enrolledClassIds?.includes(classFilter);
       }
 
       return matchesName && matchesStatus && matchesClass;

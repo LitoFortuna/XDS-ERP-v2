@@ -127,7 +127,10 @@ export const studentLogin = onCall({ cors: true }, async (request) => {
     const studentDoc = snapshot.docs[0];
     const student = studentDoc.data();
 
-    if (!student.active) {
+    // Un alumno en la Papelera (soft-delete, ver trashService.ts) solo tiene deletedAt marcado --
+    // active no se toca al borrar -- así que sin esta comprobación seguiría pudiendo entrar y leer
+    // su propio DNI/IBAN hasta que purgeTrash lo borre de verdad a los 30 días.
+    if (student.deletedAt || !student.active) {
         throw new HttpsError('permission-denied', 'Este alumno no está activo. Contacta con la administración.');
     }
 
@@ -179,6 +182,9 @@ export const checkSpecialDates = onSchedule({
 
         studentsSnapshot.forEach(doc => {
             const student = doc.data();
+            // Alumna en la Papelera (soft-delete): active no se toca al borrar, solo deletedAt --
+            // sin este filtro seguiría recibiendo emails de cumpleaños/aniversario hasta la purga.
+            if (student.deletedAt) return;
 
             // Check Birthday
             if (student.birthDate) {
@@ -248,9 +254,22 @@ const PURGE_AFTER_DAYS = 30;
  * Se ejecuta cada día a las 04:00 (Europe/Madrid, hora de bajo tráfico) y borra
  * definitivamente cualquier documento marcado como borrado hace más de 30 días.
  */
+// Firestore no admite más de 500 operaciones por batch. Sin trocear, una colección con más de
+// 500 documentos caducados de golpe (payments/attendance son las que más crecen con los años)
+// haría fallar el commit entero y, sin try/catch, abortaría también la purga de las colecciones
+// siguientes -- un atasco que solo podría crecer, ya que nunca llegaría a purgarse nada.
+const FIRESTORE_BATCH_LIMIT = 500;
+
+const chunk = <T,>(items: T[], size: number): T[][] => {
+    const chunks: T[][] = [];
+    for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+    return chunks;
+};
+
 export const purgeTrash = onSchedule({
     schedule: '0 4 * * *',
     timeZone: 'Europe/Madrid',
+    retryCount: 2,
 }, async () => {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - PURGE_AFTER_DAYS);
@@ -259,19 +278,26 @@ export const purgeTrash = onSchedule({
     let totalPurged = 0;
 
     for (const collectionName of TRASH_COLLECTIONS) {
-        const snapshot = await admin.firestore()
-            .collection(collectionName)
-            .where('deletedAt', '<=', cutoffIso)
-            .get();
+        try {
+            const snapshot = await admin.firestore()
+                .collection(collectionName)
+                .where('deletedAt', '<=', cutoffIso)
+                .get();
 
-        if (snapshot.empty) continue;
+            if (snapshot.empty) continue;
 
-        const batch = admin.firestore().batch();
-        snapshot.docs.forEach(doc => batch.delete(doc.ref));
-        await batch.commit();
+            for (const docsChunk of chunk(snapshot.docs, FIRESTORE_BATCH_LIMIT)) {
+                const batch = admin.firestore().batch();
+                docsChunk.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+            }
 
-        console.log(`[purgeTrash] ${collectionName}: ${snapshot.size} documento(s) purgado(s) definitivamente.`);
-        totalPurged += snapshot.size;
+            console.log(`[purgeTrash] ${collectionName}: ${snapshot.size} documento(s) purgado(s) definitivamente.`);
+            totalPurged += snapshot.size;
+        } catch (error) {
+            // Una colección que falla no debe impedir que se intenten las demás.
+            console.error(`[purgeTrash] Error purgando ${collectionName}:`, error);
+        }
     }
 
     console.log(`[purgeTrash] Total purgado: ${totalPurged} documento(s).`);
@@ -339,8 +365,12 @@ export const paymentReminders = onSchedule({
     const monthStr = String(monthIndex + 1).padStart(2, '0');
     const exceptionKey = `${year}-${monthIndex}`;
 
+    // No se filtra por active==true aquí: un alumno dado de baja A MITAD de este mes todavía debe
+    // la cuota de este mes (igual que src/utils/paymentStatus.ts considera facturable el propio
+    // mes de la baja) -- filtrar por active de entrada los excluía del resultado antes de que la
+    // comprobación de deactivationDate de abajo tuviera ocasión de aplicarse.
     const [studentsSnap, paymentsSnap] = await Promise.all([
-        admin.firestore().collection('students').where('active', '==', true).get(),
+        admin.firestore().collection('students').get(),
         admin.firestore().collection('payments')
             .where('date', '>=', `${year}-${monthStr}-01`)
             .where('date', '<=', `${year}-${monthStr}-31`)
@@ -359,6 +389,9 @@ export const paymentReminders = onSchedule({
         if (student.deletedAt) continue;
         if (student.paymentMethod === 'Domiciliación') continue;
         if (!student.email) continue;
+        // De baja sin fecha de baja registrada: no hay forma de saber si este mes es facturable
+        // para ella, así que por precaución no se le manda recordatorio.
+        if (!student.active && !student.deactivationDate) continue;
 
         // Alta posterior a hoy, o baja antes de empezar este mes -> no corresponde cuota.
         if (student.enrollmentDate && new Date(student.enrollmentDate) > now) continue;
