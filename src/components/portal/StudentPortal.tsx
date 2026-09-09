@@ -1,12 +1,12 @@
 
 import React, { useEffect, useState } from 'react';
-import { Student, Payment, AttendanceRecord, DanceClass, MerchandiseItem, DanceEvent, ChangeRequest, StudentPrivateData } from '../../../types';
+import { Student, Payment, AttendanceRecord, DanceClass, MerchandiseItem, DanceEvent, ChangeRequest, StudentPrivateData, StudentProgress } from '../../../types';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db, auth } from '../../config/firebase';
 import { getStudentPrivateData } from '../../services/domain/studentService';
 import { filterActive } from '../../services/domain/trashService';
 import { createChangeRequest, getChangeRequestsByStudent } from '../../../services/changeRequestService';
-import { getStudentProgress, getLevelInfo } from '../../../services/progressService';
+import { getStudentProgress, getLevelInfo, calculateYearlyDisplayStats } from '../../../services/progressService';
 import BottomNavigation, { PortalPage } from './BottomNavigation';
 import HomePage from './pages/HomePage';
 import ProgressPage from './pages/ProgressPage';
@@ -29,6 +29,8 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
     const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
     const [privateData, setPrivateData] = useState<StudentPrivateData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState(false);
+    const [reloadKey, setReloadKey] = useState(0);
     const [showChangeRequestModal, setShowChangeRequestModal] = useState(false);
     const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
 
@@ -40,11 +42,17 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
 
     useEffect(() => {
         const loadStudentData = async () => {
+            setLoadError(false);
             try {
                 console.log('[StudentPortal] Loading data for student:', student.name, student.id);
 
-                // Load all data in parallel
-                const results = await Promise.all([
+                // Promise.allSettled en vez de Promise.all: si UNA sola de estas 9 lecturas falla
+                // (p.ej. un permiso denegado puntual o una red inestable), antes se perdía TODO
+                // -- pagos, asistencia, clases, etc. quedaban en su array inicial vacío y la
+                // alumna veía un portal "cargado" pero completamente vacío, sin ningún aviso de
+                // que algo había fallado. Ahora cada lectura fallida cae a su valor por defecto
+                // por separado y se muestra un aviso con botón de reintentar.
+                const results = await Promise.allSettled([
                     // Payments
                     getDocs(query(collection(db, 'payments'), where('studentId', '==', student.id))).then(snap => {
                         const data = filterActive(snap.docs.map(d => ({ id: d.id, ...d.data() } as Payment)));
@@ -96,16 +104,24 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
                         .catch(() => null)
                 ]);
 
-                // Destructure results manually since we have mixed types (Data[] vs Snapshot)
-                const paymentsData = results[0] as Payment[];
-                const attendanceData = results[1] as AttendanceRecord[];
-                const classesData = results[2] as DanceClass[];
-                const merchandiseData = results[3] as MerchandiseItem[];
-                const eventsData = results[4] as DanceEvent[];
-                const requestsData = results[5] as ChangeRequest[];
-                const progressData = results[6] as StudentProgress;
-                const instructorsSnapshot = results[7] as any; // QuerySnapshot
-                const privateDataResult = results[8] as StudentPrivateData | null;
+                // Cada lectura que falló cae a un valor por defecto seguro en vez de tirar abajo
+                // toda la carga; se avisa aparte si hubo algún fallo real (ver loadError más abajo).
+                const getValue = <T,>(result: PromiseSettledResult<T>, fallback: T): T => {
+                    if (result.status === 'fulfilled') return result.value;
+                    console.error('[StudentPortal] Fallo cargando datos:', result.reason);
+                    return fallback;
+                };
+                const anyFailed = results.some(r => r.status === 'rejected');
+
+                const paymentsData = getValue(results[0], [] as Payment[]);
+                const attendanceData = getValue(results[1], [] as AttendanceRecord[]);
+                const classesData = getValue(results[2], [] as DanceClass[]);
+                const merchandiseData = getValue(results[3], [] as MerchandiseItem[]);
+                const eventsData = getValue(results[4], [] as DanceEvent[]);
+                const requestsData = getValue(results[5], [] as ChangeRequest[]);
+                const progressData = getValue(results[6], null as StudentProgress | null);
+                const instructorsSnapshot = getValue(results[7], { docs: [] } as any); // QuerySnapshot
+                const privateDataResult = getValue(results[8], null as StudentPrivateData | null);
 
                 // Create instructor map
                 const instructorMap = new Map();
@@ -128,29 +144,31 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
                 setChangeRequests(requestsData);
                 setPrivateData(privateDataResult);
 
-                // Set progress summary for HomePage
-                setCurrentStreak(progressData.currentStreak);
+                // Mismo cálculo que la pestaña Progreso (ProgressDashboard.tsx) -- antes esta
+                // pantalla usaba TODA la asistencia histórica mientras Progreso solo contaba la
+                // del año en curso, así que una alumna con historial de años anteriores veía un
+                // nivel/racha distinto según la pestaña en la que estuviera.
+                const { displayPoints: yearlyPoints, clientStreak } = calculateYearlyDisplayStats(attendanceData);
+                setCurrentStreak(clientStreak);
 
-                // Calculate client-side points to ensure instant feedback
-                const clientPointsBase = attendanceData.length * 10;
-                const clientPointsWithBadges = clientPointsBase + (attendanceData.length > 0 ? 50 : 0);
-                const displayPoints = Math.max(progressData.points, clientPointsWithBadges);
-
+                const displayPoints = Math.max(progressData?.points ?? 0, yearlyPoints);
                 const levelInfo = getLevelInfo(displayPoints);
                 setLevel(levelInfo.level);
                 setLevelName(levelInfo.name);
                 setLevelIcon(levelInfo.icon);
 
+                if (anyFailed) setLoadError(true);
                 console.log('[StudentPortal] All data loaded successfully');
             } catch (error) {
                 console.error('[StudentPortal] Error loading data:', error);
+                setLoadError(true);
             } finally {
                 setIsLoading(false);
             }
         };
 
         loadStudentData();
-    }, [student.id]);
+    }, [student.id, reloadKey]);
 
     const handleRequestChange = () => {
         setShowChangeRequestModal(true);
@@ -187,7 +205,7 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
         const capitalizedToday = todayDayName.charAt(0).toUpperCase() + todayDayName.slice(1);
 
         // Filter by enrolled classes AND today's day
-        const enrolledClasses = classes.filter(c => student.enrolledClassIds.includes(c.id));
+        const enrolledClasses = classes.filter(c => student.enrolledClassIds?.includes(c.id));
         const todayClasses = enrolledClasses.filter(c => c.days.includes(capitalizedToday));
         return todayClasses.sort((a, b) => a.startTime.localeCompare(b.startTime));
     };
@@ -228,6 +246,17 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
 
             {/* Main Content */}
             <main className="max-w-4xl mx-auto px-4 py-6">
+                {loadError && !isLoading && (
+                    <div className="mb-6 bg-red-900/30 border border-red-500/50 text-red-200 px-4 py-3 rounded-lg text-sm flex items-center justify-between gap-3">
+                        <span>⚠️ Algunos datos no se han podido cargar. Es posible que falte información en esta pantalla.</span>
+                        <button
+                            onClick={() => setReloadKey(k => k + 1)}
+                            className="shrink-0 bg-red-800/60 hover:bg-red-800 text-white px-3 py-1.5 rounded-md font-medium"
+                        >
+                            Reintentar
+                        </button>
+                    </div>
+                )}
                 {isLoading ? (
                     <div className="flex justify-center py-12">
                         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
@@ -308,7 +337,7 @@ interface ChangeRequestModalProps {
 const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({ student, studentDni, onClose, onSubmit, isSubmitting }) => {
     const [formData, setFormData] = useState({
         name: student.name,
-        phone: student.phone,
+        phone: student.phone || '',
         birthDate: student.birthDate || '',
         email: student.email || '',
         dni: studentDni || '',
@@ -327,7 +356,8 @@ const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({ student, studen
                         <h3 className="text-xl font-bold text-white">Solicitar Cambio de Datos</h3>
                         <button
                             onClick={onClose}
-                            className="text-gray-400 hover:text-white transition-colors"
+                            aria-label="Cerrar"
+                            className="text-gray-400 hover:text-white transition-colors p-2 -m-2"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

@@ -80,6 +80,48 @@ export function getLevelInfo(points: number): LevelInfo {
     return LEVELS[0]; // Default to level 1
 }
 
+// Antes StudentPortal.tsx (resumen en la pestaña Inicio) y ProgressDashboard.tsx (pestaña
+// Progreso) calculaban puntos/racha cada uno por su lado con fórmulas ligeramente distintas --
+// StudentPortal usaba TODA la asistencia histórica, ProgressDashboard solo la del año en curso --
+// así que una alumna con historial de años anteriores veía un nivel distinto según la pestaña. Se
+// deja una única fuente de verdad aquí, con protección ante un `date` ausente o mal formado
+// (antes `r.date.startsWith(...)` reventaba con TypeError si algún registro no tenía fecha).
+export function calculateYearlyDisplayStats(attendanceRecords: { date: string }[]): {
+    displayPoints: number;
+    clientStreak: number;
+    currentYearAttendanceCount: number;
+} {
+    const currentYearStr = new Date().getFullYear().toString();
+    const currentYearAttendance = attendanceRecords.filter(r => (r.date || '').startsWith(currentYearStr));
+
+    // Base 10 pts por clase + 50 pts de bonus por la primera clase del año.
+    const displayPoints = (currentYearAttendance.length * 10) + (currentYearAttendance.length > 0 ? 50 : 0);
+
+    const sortedDates = attendanceRecords
+        .map(r => new Date(r.date).getTime())
+        .filter(t => !isNaN(t))
+        .sort((a, b) => b - a);
+
+    let clientStreak = 0;
+    if (sortedDates.length > 0) {
+        const today = new Date().setHours(0, 0, 0, 0);
+        const lastDate = new Date(sortedDates[0]).setHours(0, 0, 0, 0);
+        const sevenDaysInMs = 7 * 86400000;
+
+        if (today - lastDate <= sevenDaysInMs) {
+            clientStreak = 1;
+            for (let i = 0; i < sortedDates.length - 1; i++) {
+                const curr = new Date(sortedDates[i]).setHours(0, 0, 0, 0);
+                const prev = new Date(sortedDates[i + 1]).setHours(0, 0, 0, 0);
+                if (curr - prev <= sevenDaysInMs) clientStreak++;
+                else break;
+            }
+        }
+    }
+
+    return { displayPoints, clientStreak, currentYearAttendanceCount: currentYearAttendance.length };
+}
+
 export function getProgressToNextLevel(points: number): { current: number; next: number; percentage: number } {
     const currentLevel = getLevelInfo(points);
     const nextLevel = LEVELS[currentLevel.level]; // next index

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { ChangeRequest, Student } from '../../types';
 import { getAllChangeRequests, approveChangeRequest, rejectChangeRequest, getChangedFields } from '../../services/changeRequestService';
+import { useAppStore } from '../store/useAppStore';
 
 interface ChangeRequestManagementProps {
     students: Student[];
 }
 
 const ChangeRequestManagement: React.FC<ChangeRequestManagementProps> = ({ students }) => {
+    const { userProfile } = useAppStore();
     const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
     const [filterStatus, setFilterStatus] = useState<'Todas' | 'Pendiente' | 'Aprobada' | 'Rechazada'>('Todas');
     const [isLoading, setIsLoading] = useState(true);
@@ -40,8 +42,7 @@ const ChangeRequestManagement: React.FC<ChangeRequestManagementProps> = ({ stude
 
         setIsProcessing(true);
         try {
-            // Assuming user email is available (você precisará passar do componente pai)
-            const adminEmail = 'admin@xendance.space'; // TODO: Get from user context
+            const adminEmail = userProfile?.email || 'desconocido';
             await approveChangeRequest(request.id, adminEmail, reviewNotes);
             alert('Solicitud aprobada y cambios aplicados');
             setViewingRequest(null);
@@ -64,7 +65,7 @@ const ChangeRequestManagement: React.FC<ChangeRequestManagementProps> = ({ stude
 
         setIsProcessing(true);
         try {
-            const adminEmail = 'admin@xendance.space'; // TODO: Get from user context
+            const adminEmail = userProfile?.email || 'desconocido';
             await rejectChangeRequest(request.id, adminEmail, reviewNotes);
             alert('Solicitud rechazada');
             setViewingRequest(null);

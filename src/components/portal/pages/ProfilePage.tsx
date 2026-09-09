@@ -141,9 +141,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({
                     </svg>
                     Mis Clases
                 </h3>
-                {allClasses.filter(c => student.enrolledClassIds.includes(c.id)).length > 0 ? (
+                {allClasses.filter(c => student.enrolledClassIds?.includes(c.id)).length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {allClasses.filter(c => student.enrolledClassIds.includes(c.id)).map((danceClass) => (
+                        {allClasses.filter(c => student.enrolledClassIds?.includes(c.id)).map((danceClass) => (
                             <div
                                 key={danceClass.id}
                                 className="bg-gray-900/50 p-4 rounded-lg border border-gray-700/50"

@@ -13,8 +13,12 @@ service cloud.firestore {
 
     // Reglas específicas para solicitudes de cambio de datos
     match /changeRequests/{requestId} {
-      // Cualquiera puede CREAR solicitudes (los estudiantes las crean)
-      allow create: if true;
+      // Solo la propia alumna autenticada puede crear una solicitud sobre SU PROPIO studentId --
+      // antes "if true" dejaba crear una solicitud para el studentId de CUALQUIER otra alumna
+      // desde la consola del navegador (sin ni siquiera iniciar sesión), y el admin aprobaba
+      // confiando ciegamente en el "antes"/"después" que venía en la propia solicitud: una vía
+      // real de secuestrar el email/teléfono de otra persona.
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.studentId;
       // Cualquiera puede LEER (para que los estudiantes vean sus solicitudes)
       allow read: if true;
       // Solo administradores pueden ACTUALIZAR (aprobar/rechazar)
@@ -23,8 +27,13 @@ service cloud.firestore {
 
     // Reglas para progreso de estudiantes (gamificación)
     match /studentProgress/{progressId} {
-      // Cualquiera puede LEER y CREAR su progreso
-      allow read, create: if true;
+      // Cualquiera puede LEER (los rankings/insignias no son sensibles)
+      allow read: if true;
+      // Crear: la propia alumna autenticada inicializando su progreso al entrar por primera vez
+      // al Portal, O un admin (updateProgressAfterAttendance crea el documento la primera vez que
+      // se pasa lista a esa alumna, bajo la sesión del admin, no la suya). Antes "if true" dejaba
+      // forjar puntos/nivel/insignias de cualquier alumna sin iniciar sesión.
+      allow create: if isAdmin() || (request.auth != null && request.auth.uid == progressId);
       // Solo administradores pueden ACTUALIZAR/ELIMINAR
       allow update, delete: if isAdmin();
     }
@@ -39,13 +48,16 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Alumnas: el documento principal es público de lectura (lo necesita el Portal de Alumno,
-    // que no usa Firebase Auth), pero los datos sensibles (DNI, IBAN) viven en una subcolección
-    // aparte que NUNCA es pública. Solo un admin, o la propia alumna autenticada con el token de
-    // Firebase que le entrega la Cloud Function studentLogin (uid == studentId), puede leerla.
-    // Esta regla también cubre las consultas collectionGroup('private') de la exportación CSV.
+    // Alumnas: antes el documento principal era público de lectura porque el Portal de Alumno
+    // buscaba su propia ficha con una query where('phone','==',...) sin sesión. Ya no hace falta:
+    // el login (Cloud Function studentLogin) emite un token real de Firebase Auth y el Portal lee
+    // su ficha directamente por id ya autenticada, así que puede restringirse igual que la
+    // subcolección de abajo -- solo un admin, o la propia alumna (uid == studentId), puede leer
+    // cualquier ficha de alumna. Antes cualquier visitante sin sesión podía listar/leer el nombre,
+    // teléfono, email, fecha de nacimiento y notas de TODAS las alumnas directamente contra
+    // Firestore (sin pasar por la app), aunque la UI nunca lo permitiera.
     match /students/{studentId} {
-      allow read: if true;
+      allow read: if isAdmin() || (request.auth != null && request.auth.uid == studentId);
       allow write: if isAdmin();
 
       match /private/{doc} {

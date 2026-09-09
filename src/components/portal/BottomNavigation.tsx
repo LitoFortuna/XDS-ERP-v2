@@ -8,7 +8,7 @@ interface BottomNavigationProps {
 }
 
 const BottomNavigation: React.FC<BottomNavigationProps> = ({ currentPage, onNavigate }) => {
-    const navItems: { id: PortalPage; label: string; icon: JSX.Element }[] = [
+    const navItems: { id: PortalPage; label: string; icon: React.ReactElement }[] = [
         {
             id: 'home',
             label: 'Inicio',
@@ -65,6 +65,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ currentPage, onNavi
                         <button
                             key={item.id}
                             onClick={() => onNavigate(item.id)}
+                            aria-current={isActive ? 'page' : undefined}
                             className={`flex flex-col items-center justify-center flex-1 h-full transition-colors duration-200 ${isActive ? 'text-purple-400' : 'text-gray-400 hover:text-gray-300'
                                 }`}
                         >

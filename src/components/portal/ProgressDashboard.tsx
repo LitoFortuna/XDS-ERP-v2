@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { StudentProgress, Student, DanceClass } from '../../../types';
-import { getStudentProgress, getLevelInfo, getProgressToNextLevel, AVAILABLE_BADGES, LEVELS } from '../../../services/progressService';
+import { getStudentProgress, getLevelInfo, getProgressToNextLevel, calculateYearlyDisplayStats, AVAILABLE_BADGES, LEVELS } from '../../../services/progressService';
 
 interface ProgressDashboardProps {
     student: Student;
@@ -37,12 +37,9 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ student, attendan
 
     // Calculate total hours - YEARLY ONLY (assuming 1 hour per class for now)
     const currentYearStr = new Date().getFullYear().toString();
-    const currentYearAttendance = attendanceRecords.filter(r => r.date.startsWith(currentYearStr));
-    const clientTotalHours = currentYearAttendance.length;
-
-    // Calculate points strictly for the CURRENT YEAR
-    // Base 10 pts per class + 50 for the first class of the year
-    const displayPoints = (currentYearAttendance.length * 10) + (currentYearAttendance.length > 0 ? 50 : 0);
+    const { displayPoints, clientStreak, currentYearAttendanceCount } = calculateYearlyDisplayStats(attendanceRecords);
+    const currentYearAttendance = attendanceRecords.filter(r => (r.date || '').startsWith(currentYearStr));
+    const clientTotalHours = currentYearAttendanceCount;
 
     const levelInfo = getLevelInfo(displayPoints);
     const levelProgress = getProgressToNextLevel(displayPoints);
@@ -66,28 +63,9 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ student, attendan
         }
     }
 
-    // Calculate streak client-side
-    const sortedDates = attendanceRecords.map(r => new Date(r.date).getTime()).sort((a, b) => b - a);
-    let clientStreak = 0;
-    if (sortedDates.length > 0) {
-        const today = new Date().setHours(0, 0, 0, 0);
-        const lastDate = new Date(sortedDates[0]).setHours(0, 0, 0, 0);
-        const sevenDaysInMs = 7 * 86400000;
-
-        if (today - lastDate <= sevenDaysInMs) {
-            clientStreak = 1;
-            for (let i = 0; i < sortedDates.length - 1; i++) {
-                const curr = new Date(sortedDates[i]).setHours(0, 0, 0, 0);
-                const prev = new Date(sortedDates[i + 1]).setHours(0, 0, 0, 0);
-                if (curr - prev <= sevenDaysInMs) clientStreak++;
-                else break;
-            }
-        }
-    }
-
     // Calculate monthly stats
     const currentMonth = new Date().toISOString().substring(0, 7); // YYYY-MM
-    const realAttendanceCountMonth = attendanceRecords.filter(r => r.date.startsWith(currentMonth)).length;
+    const realAttendanceCountMonth = attendanceRecords.filter(r => (r.date || '').startsWith(currentMonth)).length;
 
     const storedMonthStats = progress.monthlyStats[currentMonth] || { attended: 0, total: 0, percentage: 0 };
     const thisMonthStats = {

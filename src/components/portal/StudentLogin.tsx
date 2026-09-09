@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithCustomToken } from 'firebase/auth';
 import { auth, functions } from '../../config/firebase';
-import { findStudentByPhone } from '../../services/domain/studentService';
+import { getStudentById } from '../../services/domain/studentService';
 import { Student } from '../../../types';
 
 interface StudentLoginProps {
@@ -36,7 +36,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ onLoginSuccess }) => {
 
             await signInWithCustomToken(auth, token);
 
-            const student = await findStudentByPhone(phone.trim());
+            // Se busca por el studentId que devuelve el propio login, NUNCA re-buscando por
+            // teléfono: el teléfono no es único (hermanas, o el móvil de una madre repetido en
+            // varias fichas) y un "primer resultado" de esa búsqueda podía devolver la ficha de
+            // otra alumna, filtrando sus pagos/asistencia/datos a la persona equivocada.
+            const student = await getStudentById(studentId);
             if (!student) {
                 setError('No se encontró ningún alumno con ese teléfono.');
                 setIsLoading(false);

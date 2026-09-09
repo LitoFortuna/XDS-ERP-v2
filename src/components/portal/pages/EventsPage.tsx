@@ -9,7 +9,11 @@ interface EventsPageProps {
 
 const EventsPage: React.FC<EventsPageProps> = ({ student, studentEvents, allClasses }) => {
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('es-ES', {
+        // Un event.date ausente/mal formado con new Date().toLocaleDateString() sin protección
+        // renderizaba literalmente el texto "Invalid Date" en la tarjeta del evento.
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'Fecha no disponible';
+        return date.toLocaleDateString('es-ES', {
             year: 'numeric',
             month: 'long',
             day: 'numeric',
@@ -21,7 +25,7 @@ const EventsPage: React.FC<EventsPageProps> = ({ student, studentEvents, allClas
         const schedule: { [key: string]: DanceClass[] } = {};
 
         // Filter classes to show only enrolled ones
-        const enrolledClasses = allClasses.filter(c => student.enrolledClassIds.includes(c.id));
+        const enrolledClasses = allClasses.filter(c => student.enrolledClassIds?.includes(c.id));
 
         dayNames.forEach((day) => {
             schedule[day] = enrolledClasses
@@ -129,7 +133,10 @@ const EventsPage: React.FC<EventsPageProps> = ({ student, studentEvents, allClas
                                 <div className="px-6 pb-6 pt-4 border-t border-gray-700 flex items-center justify-between">
                                     <span className="text-gray-400 text-sm">Tus entradas</span>
                                     <span className="bg-gray-900/50 px-3 py-1 rounded-lg text-white font-bold">
-                                        {event.ticketsPerStudent || 1}
+                                        {/* event.ticketsPerStudent no existe en el modelo de datos (siempre
+                                            undefined, así que siempre mostraba "1" aunque la alumna hubiera
+                                            comprado más). El recuento real por alumna vive en participants[]. */}
+                                        {event.participants?.find(p => p.studentId === student.id)?.ticketCount ?? 1}
                                     </span>
                                 </div>
                             </div>

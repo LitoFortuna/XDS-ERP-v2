@@ -1,6 +1,7 @@
 import { db } from '../src/config/firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, query, where, orderBy, getDoc } from 'firebase/firestore';
 import { ChangeRequest, ChangeRequestStatus, Student } from '../types';
+import { setStudentPrivateData } from '../src/services/domain/studentService';
 
 /**
  * Service for managing student data change requests
@@ -125,11 +126,18 @@ export async function approveChangeRequest(
         if (changeRequest.requestedData.email !== undefined) {
             updateData.email = changeRequest.requestedData.email;
         }
-        if (changeRequest.requestedData.dni !== undefined) {
-            updateData.dni = changeRequest.requestedData.dni;
+
+        if (Object.keys(updateData).length > 0) {
+            await updateDoc(studentRef, updateData);
         }
 
-        await updateDoc(studentRef, updateData);
+        // El DNI vive en students/{id}/private/sensitive (dato sensible, no en el documento
+        // público) desde la migración de privacidad -- escribirlo aquí con el resto de campos
+        // (como se hacía antes) lo dejaba en un campo del documento público que nada más lee, así
+        // que la aprobación de un cambio de DNI no llegaba a aplicarse de verdad.
+        if (changeRequest.requestedData.dni !== undefined) {
+            await setStudentPrivateData(changeRequest.studentId, { dni: changeRequest.requestedData.dni });
+        }
 
         // Update the change request status
         await updateDoc(requestRef, {

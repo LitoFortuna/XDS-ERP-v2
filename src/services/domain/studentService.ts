@@ -8,6 +8,16 @@ import { softDeleteDoc, restoreDoc, permanentlyDeleteDoc, filterActive } from '.
 // firestore.rules for why (that doc is public-read for the Student Portal, this one isn't).
 const privateDocRef = (studentId: string) => doc(db, 'students', studentId, 'private', 'sensitive');
 
+// Lectura directa por id -- usado tras el login del Portal de Alumno, donde ya se conoce el
+// studentId auténtico (lo emite la Cloud Function studentLogin junto con el token). Buscar de
+// nuevo por teléfono en vez de por id sería un bug real: el teléfono no es único (hermanas, o el
+// mismo teléfono de una madre en varias fichas), así que un "primer resultado" de esa búsqueda
+// podría devolver la ficha de OTRA alumna con el mismo teléfono.
+export const getStudentById = async (studentId: string): Promise<Student | null> => {
+    const snap = await getDoc(doc(db, 'students', studentId));
+    return snap.exists() ? ({ id: snap.id, ...snap.data() } as Student) : null;
+};
+
 export const getStudentPrivateData = async (studentId: string): Promise<StudentPrivateData | null> => {
     const snap = await getDoc(privateDocRef(studentId));
     return snap.exists() ? (snap.data() as StudentPrivateData) : null;
@@ -46,7 +56,7 @@ export const batchSetStudentPrivateData = async (entries: { studentId: string; d
     await batch.commit();
 };
 
-import { getDocs, where } from 'firebase/firestore';
+import { getDocs } from 'firebase/firestore';
 
 export const fetchStudents = async (): Promise<Student[]> => {
     const q = query(collection(db, 'students'), orderBy('name'));
@@ -54,18 +64,6 @@ export const fetchStudents = async (): Promise<Student[]> => {
     return filterActive(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student)));
 };
 
-export const findStudentByPhone = async (phone: string): Promise<Student | null> => {
-    // Clean phone number (remove spaces, dashes)
-    const cleanPhone = phone.replace(/\D/g, '');
-    // We might need to store clean phones in DB to be robust, 
-    // but for now let's assume exact match or try minimal cleaning locally if DB has raw strings.
-    // Firestore simple query:
-    const q = query(collection(db, 'students'), where('phone', '==', phone));
-    const snapshot = await getDocs(q);
-
-    if (snapshot.empty) return null;
-    return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as Student;
-};
 
 // Firestore rechaza escribir `undefined` explícitamente (a diferencia de simplemente omitir la
 // clave) -- campos numéricos opcionales como augustMaintenanceFee llegan como `undefined` desde

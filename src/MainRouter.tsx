@@ -71,13 +71,21 @@ const MainRouter: React.FC = () => {
             updateMetaTag('apple-mobile-web-app-title', 'Xen Dance');
         }
 
-        // Check local storage for persistent student session
+        // Check local storage for persistent student session -- pero nunca en erp.xendance.space:
+        // ese dominio es exclusivamente el panel de admin, así que una sesión de alumna que
+        // quedara en localStorage (p.ej. en local/preview, donde ambos modos comparten origen) no
+        // debe forzar el modo portal ahí.
         const storedStudentId = localStorage.getItem('student_portal_id');
-        if (storedStudentId) {
+        if (storedStudentId && !isErpDomain) {
             // Force portal mode if we have a student session
             setMode('portal');
             setIsLoadingStudent(true);
-            getDoc(doc(db, 'students', storedStudentId)).then(snap => {
+            // firestore.rules exige request.auth.uid == studentId para leer su ficha -- hay que
+            // esperar a que Firebase Auth reestablezca la sesión (signInWithCustomToken persiste
+            // en IndexedDB, pero se restaura de forma asíncrona) antes de leer, o esta consulta
+            // llega sin token todavía y Firestore la rechaza con permission-denied, cerrando la
+            // sesión de una alumna que en realidad seguía siendo válida.
+            auth.authStateReady().then(() => getDoc(doc(db, 'students', storedStudentId))).then(snap => {
                 if (snap.exists()) {
                     setCurrentStudent({ id: snap.id, ...snap.data() } as Student);
                 } else {
