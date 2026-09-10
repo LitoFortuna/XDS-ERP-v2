@@ -44,6 +44,21 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ student, attendan
     const levelInfo = getLevelInfo(displayPoints);
     const levelProgress = getProgressToNextLevel(displayPoints);
 
+    // Web Share API si el navegador la soporta (móvil, sobre todo) -- si no, un enlace de
+    // WhatsApp como alternativa razonable, ya que es el canal que ya usa el Portal (Tienda).
+    const handleShareBadge = async (badge: typeof AVAILABLE_BADGES[number]) => {
+        const text = `¡He desbloqueado el logro "${badge.name}" ${badge.icon} en Xen Dance Space! ${badge.description} 💃🕺`;
+        if (navigator.share) {
+            try {
+                await navigator.share({ text });
+            } catch {
+                // el usuario canceló el diálogo de compartir -- no hace falta avisar de nada
+            }
+        } else {
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+        }
+    };
+
     // Merge badges logic
     let unlockedBadges = AVAILABLE_BADGES.filter(badge =>
         progress.achievements.some(a => a.badgeId === badge.id)
@@ -214,9 +229,18 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({ student, attendan
                                 return (
                                     <div
                                         key={badge.id}
-                                        className="bg-gradient-to-br from-gray-700 to-gray-800 rounded-lg p-4 border border-purple-500/50 hover:border-purple-500 transition-all cursor-pointer group"
+                                        className="relative bg-gradient-to-br from-gray-700 to-gray-800 rounded-lg p-4 border border-purple-500/50 hover:border-purple-500 transition-all cursor-pointer group"
                                         title={`${badge.description}\nDesbloqueado: ${new Date(achievement?.unlockedDate || '').toLocaleDateString('es-ES')}`}
                                     >
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleShareBadge(badge); }}
+                                            aria-label={`Compartir logro ${badge.name}`}
+                                            className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/30 text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-black/50 hover:text-white transition-all"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                                            </svg>
+                                        </button>
                                         <div className="text-4xl mb-2 group-hover:scale-110 transition-transform">
                                             {badge.icon}
                                         </div>

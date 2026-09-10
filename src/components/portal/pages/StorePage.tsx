@@ -1,14 +1,20 @@
 import React, { useState } from 'react';
+import { httpsCallable } from 'firebase/functions';
 import { MerchandiseItem } from '../../../../types';
+import { functions } from '../../../config/firebase';
 
 interface StorePageProps {
     merchandise: MerchandiseItem[];
+    onPurchaseComplete: () => void;
 }
 
-const StorePage: React.FC<StorePageProps> = ({ merchandise }) => {
+const StorePage: React.FC<StorePageProps> = ({ merchandise, onPurchaseComplete }) => {
     // State for selected variant (por id, no por talla -- dos variantes del mismo producto
     // podrían compartir talla, p.ej. mismo producto en dos colores) por nombre de producto.
     const [selectedVariantId, setSelectedVariantId] = useState<{ [productName: string]: string }>({});
+    const [purchasingKey, setPurchasingKey] = useState<string | null>(null);
+    const [purchaseError, setPurchaseError] = useState<{ [productName: string]: string }>({});
+    const [purchaseSuccess, setPurchaseSuccess] = useState<{ [productName: string]: boolean }>({});
 
     // Group merchandise by name (base product name)
     const groupedMerchandise = merchandise.reduce((acc, item) => {
@@ -52,6 +58,32 @@ const StorePage: React.FC<StorePageProps> = ({ merchandise }) => {
             ...prev,
             [productName]: variantId
         }));
+    };
+
+    // Compra real: pasa por la Cloud Function studentPurchase (merchandiseItems/merchandiseSales
+    // son de escritura solo-admin en firestore.rules, así que no se puede escribir esto
+    // directamente desde el navegador -- ver functions/src/index.ts para la validación de stock
+    // y el descuento atómico). El pago/recogida sigue siendo en persona, como con WhatsApp.
+    const handlePurchase = async (product: { name: string; variants: MerchandiseItem[] }) => {
+        const variantId = selectedVariantId[product.name] || product.variants[0]?.id;
+        if (!variantId) return;
+
+        setPurchaseError(prev => ({ ...prev, [product.name]: '' }));
+        setPurchasingKey(product.name);
+        try {
+            const studentPurchase = httpsCallable<{ itemId: string; quantity: number }, { saleId: string }>(functions, 'studentPurchase');
+            await studentPurchase({ itemId: variantId, quantity: 1 });
+            setPurchaseSuccess(prev => ({ ...prev, [product.name]: true }));
+            onPurchaseComplete();
+        } catch (err: any) {
+            console.error('[StorePage] Error en la compra:', err);
+            const message = err?.code === 'functions/failed-precondition'
+                ? 'Se ha agotado justo ahora. Prueba con otra talla.'
+                : 'No se pudo completar la reserva. Inténtalo de nuevo.';
+            setPurchaseError(prev => ({ ...prev, [product.name]: message }));
+        } finally {
+            setPurchasingKey(null);
+        }
     };
 
     return (
@@ -191,17 +223,35 @@ const StorePage: React.FC<StorePageProps> = ({ merchandise }) => {
                                         </div>
                                     )}
 
-                                    {/* Request Button */}
-                                    <button
-                                        onClick={() => handleRequestProduct(product)}
-                                        disabled={!canRequest}
-                                        className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white font-semibold py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg shadow-green-900/30 hover:shadow-xl hover:shadow-green-900/40 active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:from-green-600 disabled:hover:to-green-700"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
-                                        </svg>
-                                        <span>{outOfStock ? 'Agotado' : 'Solicitar por WhatsApp'}</span>
-                                    </button>
+                                    {/* Purchase */}
+                                    {purchaseSuccess[product.name] ? (
+                                        <div className="text-center py-3 px-2 bg-green-500/10 border border-green-500/30 rounded-xl text-green-300 text-sm font-medium">
+                                            ✅ ¡Reservado! Recoge y paga en el estudio.
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {purchaseError[product.name] && (
+                                                <p className="text-red-400 text-xs mb-2 text-center">{purchaseError[product.name]}</p>
+                                            )}
+                                            <button
+                                                onClick={() => handlePurchase(product)}
+                                                disabled={!canRequest || purchasingKey === product.name}
+                                                className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-white font-semibold py-3.5 rounded-xl transition-all duration-200 shadow-lg shadow-purple-900/30 active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed"
+                                            >
+                                                {outOfStock ? 'Agotado' : purchasingKey === product.name ? 'Reservando...' : 'Reservar (recoger y pagar en el estudio)'}
+                                            </button>
+                                            <button
+                                                onClick={() => handleRequestProduct(product)}
+                                                disabled={outOfStock}
+                                                className="w-full mt-2 flex items-center justify-center space-x-2 text-gray-400 hover:text-gray-200 text-sm py-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
+                                                </svg>
+                                                <span>o pregunta por WhatsApp</span>
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         );

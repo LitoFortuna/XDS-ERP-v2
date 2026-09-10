@@ -30,10 +30,15 @@ export const clearBadge = () => {
 };
 
 /**
- * Subscribes to push notifications
- * Stores the subscription in the user's profile for the server to use
+ * Subscribes to push notifications. `saveSubscription` decides WHERE it gets persisted --
+ * admins guardan la suya en userProfiles/{uid} (ver saveAdminSubscription más abajo), las
+ * alumnas del Portal en studentPushSubscriptions/{studentId} (subscribeStudentToPush) -- son
+ * colecciones distintas con reglas de Firestore distintas, pero el resto del flujo (permiso,
+ * VAPID key, detectar clave rotada) es exactamente el mismo.
  */
-export const subscribeToPush = async (userId: string): Promise<PushSubscription | null> => {
+const subscribeToPushCore = async (
+    saveSubscription: (subscription: PushSubscription) => Promise<void>
+): Promise<PushSubscription | null> => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         console.log('[Push] Push notifications not supported');
         return null;
@@ -89,15 +94,8 @@ export const subscribeToPush = async (userId: string): Promise<PushSubscription 
             console.log('[Push] New subscription created');
         }
 
-        // Save subscription to user's profile in Firestore
-        const { doc, setDoc } = await import('firebase/firestore');
-        const { db } = await import('../config/firebase');
-
-        await setDoc(doc(db, 'userProfiles', userId), {
-            pushSubscription: JSON.stringify(subscription)
-        }, { merge: true });
-
-        console.log('[Push] Subscription saved to profile');
+        await saveSubscription(subscription);
+        console.log('[Push] Subscription saved');
         return subscription;
 
     } catch (error) {
@@ -105,6 +103,27 @@ export const subscribeToPush = async (userId: string): Promise<PushSubscription 
         return null;
     }
 };
+
+export const subscribeToPush = async (userId: string): Promise<PushSubscription | null> =>
+    subscribeToPushCore(async (subscription) => {
+        const { doc, setDoc } = await import('firebase/firestore');
+        const { db } = await import('../config/firebase');
+        await setDoc(doc(db, 'userProfiles', userId), {
+            pushSubscription: JSON.stringify(subscription)
+        }, { merge: true });
+    });
+
+// Portal de Alumno: misma mecánica, pero guardando en studentPushSubscriptions/{studentId} (ver
+// firestore.rules) en vez de en userProfiles, que es una colección exclusiva del panel de admin.
+export const subscribeStudentToPush = async (studentId: string): Promise<PushSubscription | null> =>
+    subscribeToPushCore(async (subscription) => {
+        const { doc, setDoc } = await import('firebase/firestore');
+        const { db } = await import('../config/firebase');
+        await setDoc(doc(db, 'studentPushSubscriptions', studentId), {
+            subscription: JSON.stringify(subscription),
+            updatedAt: new Date().toISOString(),
+        });
+    });
 /**
  * Schedules a local notification for a class attendance reminder
  */

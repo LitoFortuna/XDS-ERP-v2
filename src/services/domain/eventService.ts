@@ -1,5 +1,5 @@
 
-import { collection, addDoc, updateDoc, doc, query, orderBy, getDocs } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, query, orderBy, getDocs, deleteField } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { DanceEvent } from '../../../types';
 import { softDeleteDoc, restoreDoc, permanentlyDeleteDoc, filterActive } from './trashService';
@@ -11,11 +11,21 @@ export const fetchEvents = async (): Promise<DanceEvent[]> => {
 };
 
 export const addEvent = async (event: Omit<DanceEvent, 'id'>) => {
-    await addDoc(collection(db, 'events'), event);
+    // capacity es opcional en el formulario (EventManagement.tsx la deja `undefined` si se borra
+    // el campo) -- Firestore rechaza un `undefined` explícito, así que se omite del todo en vez
+    // de escribirlo.
+    const { capacity, ...rest } = event;
+    const data = capacity !== undefined ? { ...rest, capacity } : rest;
+    await addDoc(collection(db, 'events'), data);
 };
 
 export const updateEvent = async (event: DanceEvent) => {
-    const { id, ...data } = event;
+    const { id, capacity, ...rest } = event;
+    // Aquí sí puede hacer falta borrar el campo de verdad (deleteField), no solo omitirlo: si el
+    // evento YA tenía capacity guardada y el admin la quita en el formulario, updateDoc con un
+    // objeto que simplemente no incluya `capacity` dejaría el valor antiguo intacto en Firestore.
+    const data: Record<string, unknown> = { ...rest };
+    data.capacity = capacity !== undefined ? capacity : deleteField();
     await updateDoc(doc(db, 'events', id), data);
 };
 

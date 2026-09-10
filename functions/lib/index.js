@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.scheduledFirestoreBackup = exports.purgeTrash = exports.checkSpecialDates = exports.studentLogin = exports.getVapidPublicKey = exports.onNewActivityLog = void 0;
+exports.scheduledFirestoreBackup = exports.purgeTrash = exports.checkSpecialDates = exports.joinEvent = exports.studentPurchase = exports.studentLogin = exports.onChangeRequestReviewed = exports.getVapidPublicKey = exports.onNewActivityLog = void 0;
 const firestore_1 = require("firebase-functions/v2/firestore");
 const https_1 = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
@@ -85,6 +85,53 @@ exports.onNewActivityLog = (0, firestore_1.onDocumentCreated)('activityLogs/{log
 exports.getVapidPublicKey = (0, https_1.onRequest)({ cors: true }, (req, res) => {
     res.json({ publicKey: VAPID_PUBLIC_KEY });
 });
+// Envía una notificación push a una alumna concreta (Portal), leyendo su suscripción de
+// studentPushSubscriptions/{studentId} -- ver src/utils/notificationUtils.ts::subscribeStudentToPush.
+// Si el envío falla con 410 (Gone), la suscripción ya no es válida (se desinstaló la PWA, cambió
+// de navegador, etc.) y se borra para no seguir intentando en cada aviso futuro.
+async function sendPushToStudent(studentId, payload) {
+    const subDoc = await admin.firestore().collection('studentPushSubscriptions').doc(studentId).get();
+    if (!subDoc.exists)
+        return;
+    try {
+        const subscription = JSON.parse(subDoc.data().subscription);
+        await webpush.sendNotification(subscription, JSON.stringify({
+            title: payload.title,
+            body: payload.body,
+            icon: '/android-chrome-192x192.png',
+            badge: '/android-chrome-192x192.png',
+            data: { url: payload.url || '/portal' },
+        }));
+    }
+    catch (error) {
+        console.error(`[sendPushToStudent] Error enviando a ${studentId}:`, error);
+        if (error.statusCode === 410) {
+            await admin.firestore().collection('studentPushSubscriptions').doc(studentId).delete();
+        }
+    }
+}
+/**
+ * Avisa a la alumna en cuanto un admin aprueba o rechaza su solicitud de cambio de datos, en vez
+ * de que tenga que volver a abrir el Portal para enterarse.
+ */
+exports.onChangeRequestReviewed = (0, firestore_1.onDocumentUpdated)('changeRequests/{requestId}', async (event) => {
+    var _a, _b;
+    const before = (_a = event.data) === null || _a === void 0 ? void 0 : _a.before.data();
+    const after = (_b = event.data) === null || _b === void 0 ? void 0 : _b.after.data();
+    if (!before || !after)
+        return;
+    if (before.status === after.status)
+        return; // solo interesa el cambio de estado
+    if (after.status !== 'Aprobada' && after.status !== 'Rechazada')
+        return;
+    await sendPushToStudent(after.studentId, {
+        title: after.status === 'Aprobada' ? '✅ Solicitud aprobada' : '❌ Solicitud rechazada',
+        body: after.status === 'Aprobada'
+            ? 'Tu solicitud de cambio de datos ha sido aprobada.'
+            : `Tu solicitud de cambio de datos ha sido rechazada.${after.reviewNotes ? ` Motivo: ${after.reviewNotes}` : ''}`,
+        url: '/portal',
+    });
+});
 /**
  * Callable used by the Student Portal login. The portal has no real session today — it just
  * trusts whatever studentId is in localStorage. This verifies phone+password server-side
@@ -126,6 +173,104 @@ exports.studentLogin = (0, https_1.onCall)({ cors: true }, async (request) => {
     }
     const token = await admin.auth().createCustomToken(studentDoc.id);
     return { token, studentId: studentDoc.id };
+});
+// Comprueba que quien llama es una alumna autenticada (uid == su propio studentId) y activa/no
+// borrada -- las tres funciones de autoservicio del Portal (compra, unirse a evento) comparten
+// esta misma comprobación antes de tocar nada.
+async function requireActiveStudent(request) {
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'Debes iniciar sesión en el Portal.');
+    }
+    const studentSnap = await admin.firestore().collection('students').doc(request.auth.uid).get();
+    if (!studentSnap.exists) {
+        throw new https_1.HttpsError('not-found', 'No se encontró tu ficha de alumna.');
+    }
+    const student = studentSnap.data();
+    if (student.deletedAt || !student.active) {
+        throw new https_1.HttpsError('permission-denied', 'Tu cuenta no está activa. Contacta con administración.');
+    }
+    return student;
+}
+/**
+ * Autoservicio de compra en la Tienda del Portal. merchandiseItems/merchandiseSales son
+ * escritura solo-admin en firestore.rules (para que nadie manipule precio/stock desde el
+ * navegador), así que la compra pasa por aquí: se valida la alumna, se comprueba stock dentro de
+ * una transacción (evita que dos compras simultáneas dejen el stock en negativo) y se descuenta
+ * atómicamente junto con crear el registro de venta. El pago/recogida sigue siendo en persona,
+ * como ya hacía el flujo antiguo de WhatsApp -- esto solo reserva el artículo y descuenta stock.
+ */
+exports.studentPurchase = (0, https_1.onCall)({ cors: true }, async (request) => {
+    var _a, _b, _c;
+    const student = await requireActiveStudent(request);
+    const studentId = request.auth.uid;
+    const itemId = (_a = request.data) === null || _a === void 0 ? void 0 : _a.itemId;
+    const quantity = Number((_c = (_b = request.data) === null || _b === void 0 ? void 0 : _b.quantity) !== null && _c !== void 0 ? _c : 1);
+    if (!itemId || !Number.isInteger(quantity) || quantity <= 0 || quantity > 10) {
+        throw new https_1.HttpsError('invalid-argument', 'Solicitud de compra no válida.');
+    }
+    const itemRef = admin.firestore().collection('merchandiseItems').doc(itemId);
+    const saleRef = admin.firestore().collection('merchandiseSales').doc();
+    await admin.firestore().runTransaction(async (tx) => {
+        const itemDoc = await tx.get(itemRef);
+        if (!itemDoc.exists) {
+            throw new https_1.HttpsError('not-found', 'El artículo ya no está disponible.');
+        }
+        const item = itemDoc.data();
+        const currentStock = item.stock || 0;
+        if (currentStock < quantity) {
+            throw new https_1.HttpsError('failed-precondition', 'No queda stock suficiente.');
+        }
+        tx.update(itemRef, { stock: currentStock - quantity });
+        tx.set(saleRef, {
+            itemId,
+            itemName: item.name || 'Artículo',
+            studentId,
+            quantity,
+            totalAmount: (item.salePrice || 0) * quantity,
+            saleDate: new Date().toISOString().split('T')[0],
+            paymentMethod: 'Efectivo',
+            notes: `Reserva autoservicio desde el Portal — pendiente de recoger y pagar en el estudio (${student.name || studentId}).`,
+        });
+    });
+    return { saleId: saleRef.id };
+});
+/**
+ * Autoservicio de inscripción a un evento abierto desde el Portal. events es escritura
+ * solo-admin, así que unirse pasa por aquí -- comprueba aforo (si el evento tiene `capacity`) de
+ * forma atómica para no sobre-inscribir con inscripciones simultáneas, y evita duplicar si la
+ * alumna ya estaba apuntada.
+ */
+exports.joinEvent = (0, https_1.onCall)({ cors: true }, async (request) => {
+    var _a;
+    const student = await requireActiveStudent(request);
+    const studentId = request.auth.uid;
+    const eventId = (_a = request.data) === null || _a === void 0 ? void 0 : _a.eventId;
+    if (!eventId) {
+        throw new https_1.HttpsError('invalid-argument', 'Falta el evento.');
+    }
+    const eventRef = admin.firestore().collection('events').doc(eventId);
+    await admin.firestore().runTransaction(async (tx) => {
+        const eventDoc = await tx.get(eventRef);
+        if (!eventDoc.exists) {
+            throw new https_1.HttpsError('not-found', 'El evento ya no está disponible.');
+        }
+        const event = eventDoc.data();
+        if (event.deletedAt) {
+            throw new https_1.HttpsError('not-found', 'El evento ya no está disponible.');
+        }
+        const participants = event.participants || [];
+        if (participants.some(p => p.studentId === studentId)) {
+            return; // ya estaba apuntada -- no es un error, simplemente no hace nada más
+        }
+        if (typeof event.capacity === 'number' && participants.length >= event.capacity) {
+            throw new https_1.HttpsError('failed-precondition', 'El evento ya está completo.');
+        }
+        tx.update(eventRef, {
+            participants: [...participants, { studentId, ticketCount: 1 }],
+            studentIds: admin.firestore.FieldValue.arrayUnion(studentId),
+        });
+    });
+    return { studentName: student.name };
 });
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const nodemailer = require("nodemailer");

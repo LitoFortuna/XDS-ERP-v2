@@ -13,6 +13,7 @@ import ProgressPage from './pages/ProgressPage';
 import ProfilePage from './pages/ProfilePage';
 import StorePage from './pages/StorePage';
 import EventsPage from './pages/EventsPage';
+import StudentNotificationPrompter from './StudentNotificationPrompter';
 
 interface StudentPortalProps {
     student: Student;
@@ -77,15 +78,12 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
                         snap.docs.map(d => ({ id: d.id, ...d.data() } as MerchandiseItem))
                     ),
 
-                    // Events - fetch all and filter in memory to handle legacy data without 'studentIds'
-                    getDocs(collection(db, 'events')).then(snap => {
-                        const allEvents = filterActive(snap.docs.map(d => ({ id: d.id, ...d.data() } as DanceEvent)));
-                        return allEvents.filter(event =>
-                            // Check both new array field and old participants array
-                            (event.studentIds && event.studentIds.includes(student.id)) ||
-                            (event.participants && event.participants.some(p => p.studentId === student.id))
-                        ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-                    }),
+                    // Events - fetch all (se necesitan también los eventos en los que la alumna
+                    // TODAVÍA NO está apuntada, para poder ofrecerle unirse desde EventsPage).
+                    getDocs(collection(db, 'events')).then(snap =>
+                        filterActive(snap.docs.map(d => ({ id: d.id, ...d.data() } as DanceEvent)))
+                            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                    ),
 
                     // Change requests
                     getChangeRequestsByStudent(student.id),
@@ -170,6 +168,23 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
         loadStudentData();
     }, [student.id, reloadKey]);
 
+    // Tras unirse a un evento o comprar en la Tienda, basta con refrescar esa única colección en
+    // vez de recargar todo el Portal (los 9 fetches en paralelo de más arriba).
+    const refetchEvents = () => {
+        getDocs(collection(db, 'events'))
+            .then(snap => filterActive(snap.docs.map(d => ({ id: d.id, ...d.data() } as DanceEvent)))
+                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()))
+            .then(setEvents)
+            .catch(err => console.error('[StudentPortal] Error refrescando eventos:', err));
+    };
+
+    const refetchMerchandise = () => {
+        getDocs(collection(db, 'merchandiseItems'))
+            .then(snap => snap.docs.map(d => ({ id: d.id, ...d.data() } as MerchandiseItem)))
+            .then(setMerchandise)
+            .catch(err => console.error('[StudentPortal] Error refrescando la tienda:', err));
+    };
+
     const handleRequestChange = () => {
         setShowChangeRequestModal(true);
     };
@@ -225,6 +240,7 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
 
     return (
         <div className="min-h-screen bg-gray-900 text-gray-100 font-sans pb-20">
+            <StudentNotificationPrompter studentId={student.id} />
             {/* Header */}
             <header className="bg-gray-800 border-b border-gray-700 shadow-md sticky top-0 z-10">
                 <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
@@ -292,13 +308,14 @@ const StudentPortal: React.FC<StudentPortalProps> = ({ student, onLogout }) => {
                             />
                         )}
                         {currentPage === 'store' && (
-                            <StorePage merchandise={merchandise} />
+                            <StorePage merchandise={merchandise} onPurchaseComplete={refetchMerchandise} />
                         )}
                         {currentPage === 'events' && (
                             <EventsPage
                                 student={student}
-                                studentEvents={events}
+                                allEvents={events}
                                 allClasses={classes}
+                                onEventJoined={refetchEvents}
                             />
                         )}
                     </>

@@ -25,6 +25,7 @@ const EventForm: React.FC<{
         time: event?.time || '10:00',
         location: event?.location || '',
         price: event?.price || 0,
+        capacity: event?.capacity ?? undefined as number | undefined,
         participants: event?.participants || [] as EventParticipant[],
         notes: event?.notes || '',
         imageUrl: event?.imageUrl || '',
@@ -158,6 +159,19 @@ const EventForm: React.FC<{
                 <div>
                     <label className="block text-sm font-medium text-gray-300">Precio por Entrada (€)</label>
                     <input type="number" step="0.01" name="price" value={formData.price} onChange={handleChange} className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:ring-purple-500 focus:border-purple-500" required min="0" />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-300">Aforo (opcional)</label>
+                    <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        placeholder="Sin límite"
+                        value={formData.capacity ?? ''}
+                        onChange={(e) => setFormData(prev => ({ ...prev, capacity: e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value, 10) || 0) }))}
+                        className="mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:ring-purple-500 focus:border-purple-500"
+                    />
+                    <p className="text-[10px] text-gray-500 mt-1 italic">Límite de plazas para autoinscripción desde el Portal. Vacío = sin límite.</p>
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-300">Fecha</label>

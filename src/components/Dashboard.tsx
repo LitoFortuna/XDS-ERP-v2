@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { fetchAllStudentPrivateData } from '../services/domain/studentService';
+import { fetchUpcomingAbsences } from '../services/domain/classAbsenceService';
 import { getExpectedFee } from '../utils/paymentStatus';
 import { findStudentsAtRisk } from '../utils/attendanceRisk';
-import { View } from '../../types';
+import { View, ClassAbsence } from '../../types';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
     ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell,
@@ -148,6 +149,16 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
         () => findStudentsAtRisk(students, attendanceRecords),
         [students, attendanceRecords]
     );
+
+    // Avisos de ausencia que las propias alumnas han dejado desde el Portal (ver EventsPage.tsx)
+    // para las próximas sesiones -- puramente informativo para el profesor antes de pasar lista.
+    const [upcomingAbsences, setUpcomingAbsences] = useState<ClassAbsence[]>([]);
+    useEffect(() => {
+        const todayIso = realToday.toISOString().split('T')[0];
+        fetchUpcomingAbsences(todayIso)
+            .then(setUpcomingAbsences)
+            .catch(() => { /* no bloquea el resto del dashboard si esto falla */ });
+    }, [realToday]);
 
     const [selectedRentMonth, setSelectedRentMonth] = useState(currentMonth);
     const [selectedCostMonth, setSelectedCostMonth] = useState(currentMonth); // New state for expenses chart
@@ -765,6 +776,25 @@ const Dashboard: React.FC<DashboardProps> = React.memo(() => {
                         <p className="text-xs text-amber-400/80 mt-0.5">
                             {studentsMissingIban.slice(0, 5).join(', ')}{studentsMissingIban.length > 5 ? ` y ${studentsMissingIban.length - 5} más` : ''} — sin IBAN no se podrán conciliar sus cobros bancarios.
                         </p>
+                    </div>
+                </div>
+            )}
+
+            {upcomingAbsences.length > 0 && (
+                <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-4 flex items-start gap-4">
+                    <div className="p-2.5 rounded-xl bg-orange-500/20 text-orange-400 flex-shrink-0">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-orange-300 mb-1">
+                            Avisos de ausencia próximos ({upcomingAbsences.length})
+                        </p>
+                        <div className="text-xs text-orange-400/80 space-y-0.5">
+                            {upcomingAbsences.slice(0, 5).map(a => (
+                                <p key={a.id}>{a.studentName} — {a.className}, {new Date(a.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' })}</p>
+                            ))}
+                            {upcomingAbsences.length > 5 && <p>y {upcomingAbsences.length - 5} más...</p>}
+                        </div>
                     </div>
                 </div>
             )}

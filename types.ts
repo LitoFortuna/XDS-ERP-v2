@@ -134,6 +134,7 @@ export interface DanceEvent {
   participants: EventParticipant[];
   notes?: string;
   imageUrl?: string; // Nuevo campo para el cartel del evento
+  capacity?: number; // Aforo máximo, opcional -- sin definir, la autoinscripción del Portal no limita plazas
   deletedAt?: string;
 }
 
@@ -159,6 +160,19 @@ export interface MerchandiseSale {
   saleDate: string; // YYYY-MM-DD
   paymentMethod: PaymentMethod;
   notes?: string;
+}
+
+// Aviso de una alumna de que no podrá asistir a una sesión concreta de una clase (Portal de
+// Alumno). Es solo informativo para el profesor/admin -- no modifica la asistencia real, que
+// sigue marcándose aparte en AttendanceRecord cuando toca la clase.
+export interface ClassAbsence {
+  id: string;
+  studentId: string;
+  studentName: string; // Denormalizado para mostrarlo sin tener que cruzar con students
+  classId: string;
+  className: string; // Denormalizado igual que studentName
+  date: string; // YYYY-MM-DD, fecha concreta de la sesión que se avisa
+  createdAt: string; // ISO timestamp
 }
 
 export interface AttendanceRecord {
